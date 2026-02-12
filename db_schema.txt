@@ -1,0 +1,1360 @@
+# This is an auto-generated Django model module.
+# You'll have to do the following manually to clean this up:
+#   * Rearrange models' order
+#   * Make sure each model has one field with primary_key=True
+#   * Make sure each ForeignKey and OneToOneField has `on_delete` set to the desired behavior
+#   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
+# Feel free to rename the models, but don't rename db_table values or field names.
+from django.db import models
+
+
+class AdminActionLogs(models.Model):
+    id = models.UUIDField(primary_key=True)
+    admin = models.ForeignKey('AdminUsers', models.DO_NOTHING)
+    action = models.TextField()
+    resource_type = models.TextField()
+    resource_id = models.UUIDField(blank=True, null=True)
+    details = models.JSONField(blank=True, null=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    target_type = models.TextField(blank=True, null=True)
+    target_id = models.UUIDField(blank=True, null=True)
+    old_values = models.JSONField(blank=True, null=True)
+    new_values = models.JSONField(blank=True, null=True)
+    severity = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'admin_action_logs'
+
+
+class AdminSessions(models.Model):
+    id = models.UUIDField(primary_key=True)
+    admin = models.ForeignKey('AdminUsers', models.DO_NOTHING, blank=True, null=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    session_token = models.TextField(unique=True)
+    refresh_token = models.TextField(unique=True)
+    expires_at = models.DateTimeField()
+    is_active = models.BooleanField(blank=True, null=True)
+    device_info = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'admin_sessions'
+
+
+class AdminUsers(models.Model):
+    id = models.UUIDField(primary_key=True)
+    email = models.TextField(unique=True)
+    password_hash = models.TextField(blank=True, null=True)
+    full_name = models.TextField()
+    role = models.TextField()
+    permissions = models.JSONField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    last_login_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    profile_image_url = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'admin_users'
+
+
+class AppSettings(models.Model):
+    id = models.UUIDField(primary_key=True)
+    setting_key = models.TextField(unique=True)
+    setting_value = models.JSONField()
+    description = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    updated_by = models.UUIDField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'app_settings'
+
+
+class AuthGroup(models.Model):
+    name = models.CharField(unique=True, max_length=150)
+
+    class Meta:
+        managed = False
+        db_table = 'auth_group'
+
+
+class AuthGroupPermissions(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    group = models.ForeignKey(AuthGroup, models.DO_NOTHING)
+    permission = models.ForeignKey('AuthPermission', models.DO_NOTHING)
+
+    class Meta:
+        managed = False
+        db_table = 'auth_group_permissions'
+        unique_together = (('group', 'permission'),)
+
+
+class AuthPermission(models.Model):
+    name = models.CharField(max_length=255)
+    content_type = models.ForeignKey('DjangoContentType', models.DO_NOTHING)
+    codename = models.CharField(max_length=100)
+
+    class Meta:
+        managed = False
+        db_table = 'auth_permission'
+        unique_together = (('content_type', 'codename'),)
+
+
+class CartItems(models.Model):
+    id = models.UUIDField(primary_key=True)
+    cart = models.ForeignKey('Carts', models.DO_NOTHING)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    quantity = models.IntegerField()
+    selected_size = models.TextField()
+    selected_color = models.TextField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'cart_items'
+        unique_together = (('cart', 'product', 'selected_size', 'selected_color'),)
+
+
+class Carts(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(unique=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'carts'
+
+
+class Categories(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    image_url = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    requires_size_chart = models.BooleanField(blank=True, null=True)
+    default_size_chart_template = models.ForeignKey('SizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    size_chart_applicability = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'categories'
+
+
+class ChatAnalytics(models.Model):
+    id = models.UUIDField(primary_key=True)
+    conversation = models.ForeignKey('ChatConversations', models.DO_NOTHING, blank=True, null=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    action_type = models.TextField()
+    action_data = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'chat_analytics'
+
+
+class ChatConversations(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    title = models.TextField(blank=True, null=True)
+    last_message_at = models.DateTimeField(blank=True, null=True)
+    is_resolved = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'chat_conversations'
+
+
+class ChatMessages(models.Model):
+    id = models.UUIDField(primary_key=True)
+    conversation = models.ForeignKey(ChatConversations, models.DO_NOTHING, blank=True, null=True)
+    sender_type = models.TextField()
+    message_text = models.TextField()
+    message_type = models.TextField(blank=True, null=True)
+    metadata = models.JSONField(blank=True, null=True)
+    is_read = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'chat_messages'
+
+
+class ContactBranches(models.Model):
+    id = models.UUIDField(primary_key=True)
+    branch_name = models.TextField()
+    mall_name = models.TextField(blank=True, null=True)
+    address_line_1 = models.TextField()
+    address_line_2 = models.TextField(blank=True, null=True)
+    city = models.TextField()
+    state = models.TextField()
+    country = models.TextField()
+    phone = models.TextField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'contact_branches'
+
+
+class ContactInfo(models.Model):
+    id = models.UUIDField(primary_key=True)
+    contact = models.JSONField()
+    office = models.JSONField()
+    customer_service_promise = models.JSONField()
+    social_media = models.JSONField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'contact_info'
+
+
+class ConversationContext(models.Model):
+    id = models.UUIDField(primary_key=True)
+    conversation = models.ForeignKey(ChatConversations, models.DO_NOTHING, blank=True, null=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    user_message = models.TextField()
+    intent_type = models.TextField()
+    intent_confidence = models.DecimalField(max_digits=3, decimal_places=2, blank=True, null=True)
+    ai_response = models.TextField()
+    extracted_info = models.TextField(blank=True, null=True)
+    products_mentioned = models.TextField(blank=True, null=True)  # This field type is a guess.
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'conversation_context'
+
+
+class CurrencyRates(models.Model):
+    id = models.UUIDField(primary_key=True)
+    from_currency = models.TextField()
+    to_currency = models.TextField()
+    rate = models.DecimalField(max_digits=12, decimal_places=6)
+    source = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'currency_rates'
+        unique_together = (('from_currency', 'to_currency'),)
+
+
+class DeliveryInfo(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.OneToOneField('Products', models.DO_NOTHING)
+    return_window_days = models.IntegerField(blank=True, null=True)
+    cod_eligible = models.BooleanField(blank=True, null=True)
+    free_delivery = models.BooleanField(blank=True, null=True)
+    shipping_fee = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    eta_min_days = models.IntegerField(blank=True, null=True)
+    eta_max_days = models.IntegerField(blank=True, null=True)
+    delivery_notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'delivery_info'
+
+
+class DjangoContentType(models.Model):
+    app_label = models.CharField(max_length=100)
+    model = models.CharField(max_length=100)
+
+    class Meta:
+        managed = False
+        db_table = 'django_content_type'
+        unique_together = (('app_label', 'model'),)
+
+
+class DjangoMigrations(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    app = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
+    applied = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'django_migrations'
+
+
+class DynamicSizeChartFields(models.Model):
+    id = models.UUIDField(primary_key=True)
+    size_chart = models.ForeignKey('VendorSizeChartTemplates', models.DO_NOTHING)
+    field_name = models.CharField(max_length=255)
+    field_type = models.CharField(max_length=50)
+    field_unit = models.CharField(max_length=20, blank=True, null=True)
+    is_required = models.BooleanField(blank=True, null=True)
+    field_options = models.JSONField(blank=True, null=True)
+    placeholder_text = models.TextField(blank=True, null=True)
+    help_text = models.TextField(blank=True, null=True)
+    sort_order = models.IntegerField(blank=True, null=True)
+    validation_rules = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'dynamic_size_chart_fields'
+
+
+class EscrowTransactions(models.Model):
+    id = models.UUIDField(primary_key=True)
+    order = models.ForeignKey('Orders', models.DO_NOTHING, blank=True, null=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, blank=True, null=True)
+    release_date = models.DateTimeField(blank=True, null=True)
+    payout = models.ForeignKey('VendorPayouts', models.DO_NOTHING, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'escrow_transactions'
+
+
+class Faqs(models.Model):
+    id = models.UUIDField(primary_key=True)
+    question = models.TextField()
+    answer = models.TextField()
+    category = models.TextField()
+    order_index = models.IntegerField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'faqs'
+
+
+class FeaturePosters(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    title = models.TextField()
+    subtitle = models.TextField()
+    media_url = models.TextField()
+    aspect_ratio = models.TextField(blank=True, null=True)
+    cta_label = models.TextField(blank=True, null=True)
+    sort_order = models.IntegerField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'feature_posters'
+
+
+class HeroSection(models.Model):
+    id = models.UUIDField(primary_key=True)
+    trusted_by_text = models.TextField(blank=True, null=True)
+    headline = models.TextField()
+    headline_highlight = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    media_type = models.TextField(blank=True, null=True)
+    media_url = models.TextField(blank=True, null=True)
+    primary_button = models.JSONField()
+    secondary_button = models.JSONField()
+    features = models.JSONField()
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    image_url = models.TextField(blank=True, null=True, db_comment='URL to hero section image stored in Supabase Storage')
+    video_url = models.TextField(blank=True, null=True, db_comment='URL to hero section video stored in Supabase Storage')
+
+    class Meta:
+        managed = False
+        db_table = 'hero_section'
+
+
+class LoyaltyBadges(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField(unique=True)
+    description = models.TextField(blank=True, null=True)
+    icon_url = models.TextField(blank=True, null=True)
+    badge_type = models.TextField()
+    requirement_value = models.IntegerField(blank=True, null=True)
+    bonus_points = models.IntegerField(blank=True, null=True)
+    display_order = models.IntegerField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'loyalty_badges'
+
+
+class LoyaltyEarningRules(models.Model):
+    id = models.UUIDField(primary_key=True)
+    rule_name = models.TextField()
+    rule_type = models.TextField(blank=True, null=True)
+    points_per_currency_unit = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    minimum_order_amount = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    multiplier = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    valid_from = models.DateTimeField(blank=True, null=True)
+    valid_until = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'loyalty_earning_rules'
+
+
+class LoyaltyPoints(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(unique=True)
+    points_balance = models.IntegerField(blank=True, null=True)
+    lifetime_points = models.IntegerField(blank=True, null=True)
+    tier = models.TextField(blank=True, null=True)
+    tier_updated_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'loyalty_points'
+
+
+class LoyaltyRewards(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    points_required = models.IntegerField()
+    reward_type = models.TextField()
+    discount_percentage = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    discount_amount = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    minimum_order_amount = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    validity_days = models.IntegerField(blank=True, null=True)
+    max_redemptions_per_user = models.IntegerField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    display_order = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'loyalty_rewards'
+
+
+class LoyaltyTransactions(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    points_change = models.IntegerField()
+    transaction_type = models.TextField()
+    reference_type = models.TextField(blank=True, null=True)
+    reference_id = models.UUIDField(blank=True, null=True)
+    description = models.TextField()
+    points_balance_after = models.IntegerField()
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'loyalty_transactions'
+
+
+class LoyaltyVouchers(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    reward = models.ForeignKey(LoyaltyRewards, models.DO_NOTHING)
+    voucher_code = models.TextField(unique=True)
+    points_spent = models.IntegerField()
+    discount_type = models.TextField()
+    discount_value = models.DecimalField(max_digits=65535, decimal_places=65535)
+    minimum_order_amount = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    status = models.TextField(blank=True, null=True)
+    redeemed_at = models.DateTimeField(blank=True, null=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(blank=True, null=True)
+    order = models.ForeignKey('Orders', models.DO_NOTHING, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'loyalty_vouchers'
+
+
+class OrderItems(models.Model):
+    id = models.UUIDField(primary_key=True)
+    order = models.ForeignKey('Orders', models.DO_NOTHING)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    quantity = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    selected_size = models.TextField()
+    selected_color = models.TextField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'order_items'
+
+
+class OrderStatusHistory(models.Model):
+    id = models.UUIDField(primary_key=True)
+    order = models.ForeignKey('Orders', models.DO_NOTHING)
+    previous_status = models.TextField(blank=True, null=True)
+    new_status = models.TextField()
+    changed_by = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='changed_by', blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'order_status_history'
+
+
+class Orders(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    address = models.ForeignKey('ShippingAddresses', models.DO_NOTHING, blank=True, null=True)
+    payment_method = models.ForeignKey('PaymentMethods', models.DO_NOTHING, blank=True, null=True)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    shipping_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    total = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.TextField()
+    created_at = models.DateTimeField()
+    order_number = models.TextField(unique=True, blank=True, null=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+    shipping_method = models.TextField(blank=True, null=True)
+    tracking_number = models.TextField(blank=True, null=True)
+    estimated_delivery = models.DateTimeField(blank=True, null=True)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    squad_transaction_ref = models.CharField(max_length=255, blank=True, null=True, db_comment='Squad payment gateway transaction reference')
+    squad_gateway_ref = models.CharField(max_length=255, blank=True, null=True, db_comment='Squad gateway internal reference')
+    payment_status = models.CharField(max_length=50, blank=True, null=True, db_comment='Payment status: pending, completed, failed, refunded')
+    escrow_status = models.CharField(max_length=50, blank=True, null=True, db_comment='Escrow status: none, held, released')
+    escrow_release_date = models.DateTimeField(blank=True, null=True, db_comment='Date when escrow funds will be/were released')
+    vendor_payout_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    loyalty_points_earned = models.IntegerField(blank=True, null=True)
+    loyalty_voucher_code = models.TextField(blank=True, null=True)
+    loyalty_discount_applied = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'orders'
+
+
+class OtherPaymentMethods(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    user_id = models.UUIDField()
+    payment_method = models.TextField()
+    details = models.JSONField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'other_payment_methods'
+
+
+class PaymentMethods(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    card_holder_name = models.TextField()
+    card_number = models.TextField()
+    card_type = models.TextField()
+    expiry_month = models.TextField()
+    expiry_year = models.TextField()
+    is_default = models.BooleanField(blank=True, null=True)
+    razorpay_card_token = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField()
+    cvv = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'payment_methods'
+
+
+class PaymentWebhooks(models.Model):
+    id = models.UUIDField(primary_key=True)
+    transaction_ref = models.CharField(max_length=255, db_comment='Squad transaction reference')
+    order = models.ForeignKey(Orders, models.DO_NOTHING, blank=True, null=True)
+    webhook_data = models.JSONField(db_comment='Complete webhook payload from Squad')
+    status = models.CharField(max_length=50, db_comment='Payment status from webhook')
+    processed_at = models.DateTimeField(blank=True, null=True, db_comment='When the webhook was processed')
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'payment_webhooks'
+        db_table_comment = 'Logs all payment webhook notifications from Squad'
+
+
+class Payments(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    user_email = models.TextField()
+    amount = models.IntegerField()
+    currency = models.TextField()
+    transaction_ref = models.TextField(unique=True)
+    status = models.TextField()
+    payment_type = models.TextField()
+    token = models.TextField(blank=True, null=True)
+    gateway_response = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'payments'
+
+
+class PayoutTransactions(models.Model):
+    id = models.UUIDField(primary_key=True)
+    payout = models.ForeignKey('VendorPayouts', models.DO_NOTHING, blank=True, null=True)
+    transaction_type = models.CharField(max_length=20)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True, null=True)
+    reference_id = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'payout_transactions'
+
+
+class PlatformSettings(models.Model):
+    id = models.UUIDField(primary_key=True)
+    category = models.TextField()
+    key = models.TextField()
+    value = models.JSONField()
+    description = models.TextField(blank=True, null=True)
+    is_public = models.BooleanField(blank=True, null=True)
+    updated_by = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='updated_by', blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'platform_settings'
+        unique_together = (('category', 'key'),)
+
+
+class ProductApprovalQueue(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING)
+    action_type = models.TextField()
+    status = models.TextField()
+    submitted_data = models.JSONField()
+    admin_notes = models.TextField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='reviewed_by', blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    priority = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_approval_queue'
+
+
+class ProductHighlights(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    label = models.TextField()
+    icon_url = models.TextField(blank=True, null=True)
+    sort_order = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_highlights'
+
+
+class ProductOffers(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    type = models.TextField()
+    code = models.TextField(blank=True, null=True)
+    description = models.TextField()
+    expiry_date = models.DateTimeField(blank=True, null=True)
+    icon_url = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    sort_order = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_offers'
+
+
+class ProductQa(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    user_id = models.UUIDField(blank=True, null=True)
+    question = models.TextField()
+    answer = models.TextField(blank=True, null=True)
+    answered_by = models.UUIDField(blank=True, null=True)
+    answered_at = models.DateTimeField(blank=True, null=True)
+    is_helpful_count = models.IntegerField(blank=True, null=True)
+    is_verified = models.BooleanField(blank=True, null=True)
+    status = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    vendor_response = models.TextField(blank=True, null=True)
+    vendor_response_date = models.DateTimeField(blank=True, null=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_qa'
+
+
+class ProductRecommendations(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.OneToOneField('Products', models.DO_NOTHING)
+    similar_products = models.TextField(blank=True, null=True)  # This field type is a guess.
+    from_seller_products = models.TextField(blank=True, null=True)  # This field type is a guess.
+    you_might_also_like = models.TextField(blank=True, null=True)  # This field type is a guess.
+    algorithm_version = models.TextField(blank=True, null=True)
+    confidence_score = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    last_updated = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_recommendations'
+
+
+class ProductReviews(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    user_id = models.UUIDField(blank=True, null=True)
+    order = models.ForeignKey(Orders, models.DO_NOTHING, blank=True, null=True)
+    rating = models.IntegerField()
+    title = models.TextField(blank=True, null=True)
+    content = models.TextField()
+    images = models.TextField(blank=True, null=True)  # This field type is a guess.
+    verified_purchase = models.BooleanField(blank=True, null=True)
+    helpful_count = models.IntegerField(blank=True, null=True)
+    reported_count = models.IntegerField(blank=True, null=True)
+    status = models.TextField(blank=True, null=True)
+    vendor_response = models.TextField(blank=True, null=True)
+    vendor_response_date = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_reviews'
+
+
+class ProductReviewsSummary(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.OneToOneField('Products', models.DO_NOTHING)
+    with_media = models.IntegerField(blank=True, null=True)
+    histogram = models.TextField(blank=True, null=True)  # This field type is a guess.
+    total_reviews = models.IntegerField(blank=True, null=True)
+    average_rating = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    last_updated = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_reviews_summary'
+
+
+class ProductSizeChartAssignments(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    template = models.ForeignKey('SizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    vendor_template = models.ForeignKey('VendorSizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    custom_data = models.JSONField(blank=True, null=True)
+    assignment_type = models.CharField(max_length=20)
+    assigned_by = models.ForeignKey('Vendors', models.DO_NOTHING, db_column='assigned_by', blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_size_chart_assignments'
+
+
+class ProductSpecifications(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey('Products', models.DO_NOTHING)
+    group_name = models.TextField()
+    spec_name = models.TextField()
+    spec_value = models.TextField()
+    sort_order = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'product_specifications'
+
+
+class Products(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    images = models.TextField()
+    sizes = models.TextField()  # This field type is a guess.
+    rating = models.DecimalField(max_digits=2, decimal_places=1)
+    reviews = models.IntegerField()
+    in_stock = models.BooleanField()
+    category = models.ForeignKey(Categories, models.DO_NOTHING, blank=True, null=True)
+    brand = models.TextField(blank=True, null=True)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    is_on_sale = models.BooleanField(blank=True, null=True)
+    sale_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    is_featured = models.BooleanField(blank=True, null=True)
+    is_new_arrival = models.BooleanField(blank=True, null=True)
+    added_date = models.DateTimeField(blank=True, null=True)
+    search_vector = models.TextField(blank=True, null=True)  # This field type is a guess.
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+    approval_status = models.TextField(blank=True, null=True)
+    sku = models.TextField(unique=True, blank=True, null=True)
+    stock_quantity = models.IntegerField(blank=True, null=True)
+    weight = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    dimensions = models.JSONField(blank=True, null=True)
+    shipping_required = models.BooleanField(blank=True, null=True)
+    meta_title = models.TextField(blank=True, null=True)
+    meta_description = models.TextField(blank=True, null=True)
+    tags = models.TextField(blank=True, null=True)  # This field type is a guess.
+    status = models.TextField(blank=True, null=True)
+    color_images = models.JSONField(blank=True, null=True, db_comment='JSON structure mapping colors to image arrays: {"Black": ["url1", "url2"], "White": ["url3", "url4"]}')
+    size_chart_template = models.ForeignKey('SizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    custom_size_chart_data = models.JSONField(blank=True, null=True)
+    size_guide_type = models.TextField(blank=True, null=True)
+    embedding = models.TextField(blank=True, null=True)  # This field type is a guess.
+    subtitle = models.TextField(blank=True, null=True)
+    mrp = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    currency = models.TextField(blank=True, null=True)
+    orders_count = models.IntegerField(blank=True, null=True)
+    box_contents = models.TextField(blank=True, null=True)  # This field type is a guess.
+    usage_instructions = models.TextField(blank=True, null=True)  # This field type is a guess.
+    care_instructions = models.TextField(blank=True, null=True)  # This field type is a guess.
+    safety_notes = models.TextField(blank=True, null=True)  # This field type is a guess.
+    seo_data = models.JSONField(blank=True, null=True)
+    video_url = models.TextField(blank=True, null=True, db_comment='URL to product video stored in Supabase Storage. Max file size: 2MB')
+    base_currency = models.TextField(blank=True, null=True, db_comment='The original currency in which the product price was set')
+    converted_prices = models.JSONField(blank=True, null=True, db_comment='JSON object containing converted prices in different currencies: {"USD": {"price": 100, "mrp": 120, "sale_price": 90}, "EUR": {...}}')
+    product_type = models.TextField(blank=True, null=True)
+    sizing_required = models.BooleanField(blank=True, null=True)
+    size_chart_override = models.TextField(blank=True, null=True)
+    subcategory = models.ForeignKey('Subcategories', models.DO_NOTHING, blank=True, null=True, db_comment='Foreign key reference to subcategories table for more granular product classification')
+    colors = models.JSONField(db_comment='JSON structure mapping colors to objects with hex and quantity: {"Black": {"hex": "#000000", "quantity": 10}, "White": {"hex": "#FFFFFF", "quantity": 5}}')
+    rejection_reason = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'products'
+
+
+class Profiles(models.Model):
+    id = models.UUIDField(primary_key=True)
+    full_name = models.TextField(blank=True, null=True)
+    phone_number = models.TextField(blank=True, null=True)
+    image_path = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    role = models.TextField()  # This field type is a guess.
+    is_deleted = models.BooleanField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'profiles'
+
+
+class PromotionalBanners(models.Model):
+    id = models.UUIDField(primary_key=True)
+    title = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    subtitle = models.TextField(blank=True, null=True)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    discount_type = models.TextField(blank=True, null=True)
+    coupon_code = models.TextField(blank=True, null=True)
+    background_image_url = models.TextField(blank=True, null=True)
+    show_title = models.BooleanField(blank=True, null=True)
+    show_description = models.BooleanField(blank=True, null=True)
+    show_subtitle = models.BooleanField(blank=True, null=True)
+    show_discount = models.BooleanField(blank=True, null=True)
+    show_coupon_code = models.BooleanField(blank=True, null=True)
+    show_background_image = models.BooleanField(blank=True, null=True)
+    title_color = models.TextField(blank=True, null=True)
+    description_color = models.TextField(blank=True, null=True)
+    subtitle_color = models.TextField(blank=True, null=True)
+    discount_color = models.TextField(blank=True, null=True)
+    coupon_code_color = models.TextField(blank=True, null=True)
+    background_color = models.TextField(blank=True, null=True)
+    overlay_color = models.TextField(blank=True, null=True)
+    text_alignment = models.TextField(blank=True, null=True)
+    banner_height = models.TextField(blank=True, null=True)
+    padding = models.TextField(blank=True, null=True)
+    border_radius = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    start_date = models.DateTimeField(blank=True, null=True)
+    end_date = models.DateTimeField(blank=True, null=True)
+    priority = models.IntegerField(blank=True, null=True)
+    is_template = models.BooleanField(blank=True, null=True)
+    template_name = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='created_by', blank=True, null=True)
+    custom_styles = models.JSONField(blank=True, null=True)
+    button_text = models.TextField(blank=True, null=True)
+    button_url = models.TextField(blank=True, null=True)
+    button_color = models.TextField(blank=True, null=True)
+    button_text_color = models.TextField(blank=True, null=True)
+    show_button = models.BooleanField(blank=True, null=True)
+    banner_size = models.TextField(blank=True, null=True, db_comment='Banner size: small, medium, or large. Actual dimensions handled on frontend.')
+
+    class Meta:
+        managed = False
+        db_table = 'promotional_banners'
+
+
+class ReviewHelpfulness(models.Model):
+    id = models.UUIDField(primary_key=True)
+    review = models.ForeignKey(ProductReviews, models.DO_NOTHING)
+    user_id = models.UUIDField()
+    is_helpful = models.BooleanField()
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'review_helpfulness'
+        unique_together = (('review', 'user_id'),)
+
+
+class SearchAnalytics(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    query = models.TextField()
+    result_count = models.IntegerField()
+    filters = models.JSONField(blank=True, null=True)
+    timestamp = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'search_analytics'
+
+
+class ShippingAddresses(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    name = models.TextField()
+    phone = models.TextField()
+    address_line1 = models.TextField()
+    address_line2 = models.TextField(blank=True, null=True)
+    city = models.TextField()
+    state = models.TextField()
+    zip = models.TextField()
+    country = models.TextField(blank=True, null=True)
+    is_default = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField()
+    type = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'shipping_addresses'
+
+
+class SizeChartAnalytics(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.ForeignKey(Products, models.DO_NOTHING)
+    template = models.ForeignKey('SizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    vendor_template = models.ForeignKey('VendorSizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    action_type = models.CharField(max_length=50)
+    selected_size = models.CharField(max_length=10, blank=True, null=True)
+    session_id = models.CharField(max_length=255, blank=True, null=True)
+    user_agent = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'size_chart_analytics'
+
+
+class SizeChartEntries(models.Model):
+    id = models.UUIDField(primary_key=True)
+    template = models.ForeignKey('SizeChartTemplates', models.DO_NOTHING, blank=True, null=True)
+    size_name = models.TextField()
+    measurements = models.JSONField()
+    sort_order = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'size_chart_entries'
+
+
+class SizeChartMigrationLog(models.Model):
+    id = models.UUIDField(primary_key=True)
+    size_chart = models.ForeignKey('VendorSizeChartTemplates', models.DO_NOTHING)
+    old_measurement_types = models.JSONField(blank=True, null=True)
+    migration_status = models.CharField(max_length=20, blank=True, null=True)
+    migration_notes = models.TextField(blank=True, null=True)
+    migrated_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'size_chart_migration_log'
+
+
+class SizeChartTemplates(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField()
+    category = models.ForeignKey(Categories, models.DO_NOTHING, blank=True, null=True)
+    subcategory = models.TextField(blank=True, null=True)
+    measurement_types = models.JSONField()
+    measurement_instructions = models.TextField(blank=True, null=True)
+    size_recommendations = models.JSONField(blank=True, null=True)
+    chart_type = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'size_chart_templates'
+
+
+class Subcategories(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    category = models.ForeignKey(Categories, models.DO_NOTHING)
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'subcategories'
+
+
+class SubscriptionPlans(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    billing_cycle = models.TextField()
+    features = models.JSONField(blank=True, null=True)
+    limits = models.JSONField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    sort_order = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'subscription_plans'
+
+
+class SupportInfo(models.Model):
+    id = models.UUIDField(primary_key=True)
+    title = models.TextField()
+    subtitle = models.TextField(blank=True, null=True)
+    type = models.TextField()
+    icon = models.TextField()
+    action_type = models.TextField(blank=True, null=True)
+    action_value = models.TextField(blank=True, null=True)
+    availability = models.TextField(blank=True, null=True)
+    order_index = models.IntegerField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'support_info'
+
+
+class SupportMessages(models.Model):
+    id = models.UUIDField(primary_key=True)
+    ticket = models.ForeignKey('SupportTickets', models.DO_NOTHING)
+    sender_id = models.UUIDField()
+    sender_role = models.TextField()
+    message_content = models.TextField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'support_messages'
+
+
+class SupportTickets(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING)
+    created_at = models.DateTimeField()
+    status = models.TextField()
+    subject = models.TextField()
+    last_updated = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    priority = models.TextField(blank=True, null=True)
+    assigned_to = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='assigned_to', blank=True, null=True)
+    category = models.TextField(blank=True, null=True)
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    resolved_by = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='resolved_by', related_name='supporttickets_resolved_by_set', blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'support_tickets'
+
+
+class UserBadges(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    badge = models.ForeignKey(LoyaltyBadges, models.DO_NOTHING)
+    earned_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_badges'
+        unique_together = (('user_id', 'badge'),)
+
+
+class UserCurrencyPreferences(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(unique=True, blank=True, null=True)
+    preferred_currency = models.TextField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_currency_preferences'
+
+
+class VendorApplications(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+    application_type = models.TextField()
+    status = models.TextField()
+    submitted_data = models.JSONField()
+    admin_notes = models.TextField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(AdminUsers, models.DO_NOTHING, db_column='reviewed_by', blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_applications'
+
+
+class VendorBankAccounts(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+    bank_code = models.CharField(max_length=10)
+    account_number = models.CharField(max_length=20)
+    account_name = models.CharField(max_length=255)
+    is_verified = models.BooleanField(blank=True, null=True)
+    is_default = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    bank_name = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=50, blank=True, null=True)
+    admin_notes = models.TextField(blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_bank_accounts'
+
+
+class VendorFollows(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_follows'
+        unique_together = (('user_id', 'vendor'),)
+
+
+class VendorPayouts(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING, blank=True, null=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, blank=True, null=True)
+    status = models.CharField(max_length=20, blank=True, null=True)
+    squad_transaction_ref = models.CharField(max_length=255, blank=True, null=True)
+    bank_account = models.ForeignKey(VendorBankAccounts, models.DO_NOTHING, blank=True, null=True)
+    requested_at = models.DateTimeField(blank=True, null=True)
+    processed_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    admin_notes = models.TextField(blank=True, null=True)
+    failure_reason = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_payouts'
+
+
+class VendorReviews(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING)
+    user_id = models.UUIDField()
+    rating = models.IntegerField()
+    review_text = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_reviews'
+        unique_together = (('vendor', 'user_id'),)
+
+
+class VendorSessions(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING)
+    user_id = models.UUIDField()
+    session_token = models.TextField(unique=True)
+    refresh_token = models.TextField(blank=True, null=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    device_info = models.JSONField(blank=True, null=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_sessions'
+
+
+class VendorSizeChartTemplates(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.ForeignKey('Vendors', models.DO_NOTHING)
+    name = models.CharField(max_length=255)
+    category = models.ForeignKey(Categories, models.DO_NOTHING, blank=True, null=True)
+    subcategory = models.CharField(max_length=255, blank=True, null=True)
+    measurement_types = models.JSONField()
+    measurement_instructions = models.TextField(blank=True, null=True)
+    size_recommendations = models.JSONField(blank=True, null=True)
+    chart_type = models.CharField(max_length=50, blank=True, null=True)
+    template_data = models.JSONField()
+    approval_status = models.CharField(max_length=20, blank=True, null=True)
+    approved_by = models.UUIDField(blank=True, null=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    is_dynamic = models.BooleanField(blank=True, null=True)
+    schema_version = models.CharField(max_length=10, blank=True, null=True)
+    migration_completed_at = models.DateTimeField(blank=True, null=True)
+    image_url = models.TextField(blank=True, null=True, db_comment='URL to the size chart image stored in Supabase Storage')
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_size_chart_templates'
+
+
+class VendorSubscriptions(models.Model):
+    id = models.UUIDField(primary_key=True)
+    vendor = models.OneToOneField('Vendors', models.DO_NOTHING)
+    subscription_plan = models.ForeignKey(SubscriptionPlans, models.DO_NOTHING)
+    status = models.TextField()
+    started_at = models.DateTimeField(blank=True, null=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
+    cancelled_at = models.DateTimeField(blank=True, null=True)
+    auto_renew = models.BooleanField(blank=True, null=True)
+    payment_method_id = models.UUIDField(blank=True, null=True)
+    last_payment_date = models.DateTimeField(blank=True, null=True)
+    next_payment_date = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendor_subscriptions'
+
+
+class Vendors(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField(blank=True, null=True)
+    business_name = models.TextField()
+    business_description = models.TextField(blank=True, null=True)
+    business_logo = models.TextField(blank=True, null=True)
+    business_email = models.TextField()
+    business_phone = models.TextField(blank=True, null=True)
+    business_address = models.TextField(blank=True, null=True)
+    status = models.TextField(blank=True, null=True)
+    is_featured = models.BooleanField(blank=True, null=True)
+    average_rating = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    total_reviews = models.IntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    business_registration_number = models.TextField(blank=True, null=True)
+    tax_id = models.TextField(blank=True, null=True)
+    business_type = models.TextField(blank=True, null=True)
+    verification_status = models.TextField(blank=True, null=True)
+    verification_documents = models.JSONField(blank=True, null=True)
+    total_sales = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    total_orders = models.IntegerField(blank=True, null=True)
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    payout_schedule = models.TextField(blank=True, null=True)
+    bank_account_info = models.JSONField(blank=True, null=True)
+    payment_method_preference = models.TextField(blank=True, null=True)
+    last_login_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(blank=True, null=True)
+    admin_notes = models.TextField(blank=True, null=True)
+    total_earnings = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    pending_payouts = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    total_paid_out = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    available_balance = models.DecimalField(max_digits=65535, decimal_places=65535, blank=True, null=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'vendors'
+
+
+class WarrantyInfo(models.Model):
+    id = models.UUIDField(primary_key=True)
+    product = models.OneToOneField(Products, models.DO_NOTHING)
+    type = models.TextField()
+    duration = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    terms_url = models.TextField(blank=True, null=True)
+    coverage_details = models.TextField(blank=True, null=True)  # This field type is a guess.
+    exclusions = models.TextField(blank=True, null=True)  # This field type is a guess.
+    created_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'warranty_info'
+
+
+class Wishlist(models.Model):
+    id = models.UUIDField(primary_key=True)
+    user_id = models.UUIDField()
+    product = models.ForeignKey(Products, models.DO_NOTHING)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'wishlist'
+        unique_together = (('user_id', 'product'),)
