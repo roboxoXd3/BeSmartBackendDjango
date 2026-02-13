@@ -15,6 +15,8 @@ from payments.serializers import (
 from payments.services.squad_service import SquadPaymentService
 from orders.models import Order
 from orders.services import OrderService
+from drf_spectacular.utils import extend_schema, OpenApiTypes
+from rest_framework import serializers # for serializers.Serializer if needed
 
 
 class PaymentMethodListView(viewsets.ModelViewSet):
@@ -22,6 +24,8 @@ class PaymentMethodListView(viewsets.ModelViewSet):
     serializer_class = PaymentMethodSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_anonymous:
+            return PaymentMethod.objects.none()
         return PaymentMethod.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
@@ -37,8 +41,14 @@ class PaymentViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filter payments by current user"""
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_anonymous:
+             return Payment.objects.none()
         return Payment.objects.filter(user=self.request.user)
     
+    @extend_schema(
+        request=InitiatePaymentSerializer,
+        responses={200: OpenApiTypes.OBJECT}
+    )
     @action(detail=False, methods=['post'])
     def initiate(self, request):
         """
@@ -156,6 +166,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 
 
 @csrf_exempt
+@extend_schema(exclude=True)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def squad_webhook(request):

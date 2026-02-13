@@ -149,6 +149,23 @@ AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_S3_ENDPOINT_URL = os.getenv('SUPABASE_S3_URL')
 AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'eu-central-1')
 
+# Supabase Auth Configuration
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET')
+
+# REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'users.authentication.SupabaseAuthentication', # Custom Supabase Auth
+        # 'rest_framework.authentication.SessionAuthentication', # Optional: enable if needed for admin
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+}
+
 # Bucket Names
 BUCKET_PRODUCTS = os.getenv('BUCKET_PRODUCTS', 'products')
 BUCKET_PRODUCT_VIDEOS = os.getenv('BUCKET_PRODUCT_VIDEOS', 'product-videos')
