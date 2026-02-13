@@ -3,10 +3,12 @@ from rest_framework.routers import DefaultRouter
 from payments import views
 
 router = DefaultRouter()
-router.register(r'methods', views.PaymentMethodListView, basename='payment-methods')
 router.register(r'payments', views.PaymentViewSet, basename='payment')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('webhook/', views.squad_webhook, name='squad-webhook'),
+    path('methods/', views.PaymentMethodListView.as_view(), name='payment-methods'),
+    path('webhook/', views.PaymentWebhookView.as_view(), name='squad-webhook'),
+    path('initiate/', views.InitiatePaymentView.as_view(), name='initiate-payment'),
+    path('verify/<str:ref>/', views.VerifyPaymentView.as_view(), name='verify-payment'),
 ]

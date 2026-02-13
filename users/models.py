@@ -17,7 +17,7 @@ class User(AbstractUser):
         return self.email
 
 class Profile(models.Model):
-    id = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, related_name='profile')
+    id = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, related_name='profile', db_column='id')
     full_name = models.TextField(null=True, blank=True)
     phone_number = models.TextField(null=True, blank=True)
     image_path = models.TextField(null=True, blank=True)

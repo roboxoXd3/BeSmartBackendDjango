@@ -15,9 +15,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key')
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,.up.railway.app').split(',')
-
-CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -27,12 +25,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.postgres',
     
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'drf_spectacular',
     'channels',
@@ -217,7 +213,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'users.authentication.SupabaseAuthentication',
+        # 'rest_framework_simplejwt.authentication.JWTAuthentication', # Removed
         'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
@@ -267,21 +264,3 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",
     "http://localhost:3002",
 ]
-
-from decouple import config
-
-# Squad Payment Configuration
-SQUAD_CONFIG = {
-    'SECRET_KEY': config('SQUAD_SECRET_KEY', default=''),
-    'PUBLIC_KEY': config('SQUAD_PUBLIC_KEY', default=''),
-    'BASE_URL': config('SQUAD_BASE_URL', default='https://sandbox-api-d.squadco.com'),
-    'WEBHOOK_SECRET': config('SQUAD_WEBHOOK_SECRET', default=''),
-}
-
-# Payment Configuration
-PAYMENT_CONFIG = {
-    'MIN_PAYOUT_AMOUNT': 5000,  # 50 minimum payout
-    'PAYOUT_PROCESSING_FEE': 0.025,  # 2.5% fee
-    'ESCROW_HOLD_DAYS': 7,  # Hold funds for 7 days
-    'CALLBACK_URL': config('PAYMENT_CALLBACK_URL', default='http://localhost:8000/api/payments/callback/'),
-}

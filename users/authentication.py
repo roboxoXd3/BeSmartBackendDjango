@@ -3,7 +3,6 @@ from rest_framework import exceptions
 from django.conf import settings
 from django.contrib.auth import get_user_model
 import jwt
-from supabase import create_client, Client
 
 User = get_user_model()
 
@@ -23,33 +22,30 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             return None
 
         try:
-            # Verify the token using Supabase JWT Secret
-            payload = jwt.decode(
-                token,
-                settings.SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
-                audience="authenticated"
-            )
-        except jwt.ExpiredSignatureError:
-            raise exceptions.AuthenticationFailed('Token has expired.')
-        except jwt.DecodeError:
-            raise exceptions.AuthenticationFailed('Error decoding token.')
-        except jwt.InvalidTokenError:
-            raise exceptions.AuthenticationFailed('Invalid token.')
-
-        user_id = payload.get('sub')
-        if not user_id:
-            raise exceptions.AuthenticationFailed('User identifier not found in token.')
-
-        try:
+            # Strictly call Supabase to validate the token (Step away from "Django's end")
+            from users.views import get_supabase_client # Import helper
+            supabase = get_supabase_client()
+            
+            # get_user(token) calls the Supabase API. 
+            # If token is invalid/expired/revoked, it raises an exception (or returns error).
+            user_response = supabase.auth.get_user(token)
+            user_data = user_response.user
+            
+            if not user_data:
+                 raise exceptions.AuthenticationFailed('Invalid token: No user data returned from Supabase.')
+                 
             # Sync Logic: Ensure local user exists
+            # We map Supabase 'id' (UUID) to Django User 'id'
             user, created = User.objects.get_or_create(
-                id=user_id, # Assuming User model uses UUID matching Supabase
+                id=user_data.id, 
                 defaults={
-                    'email': payload.get('email'),
-                    'username': payload.get('email') # Fallback username
+                    'email': user_data.email,
+                    'username': user_data.email # Fallback username
                 }
             )
             return (user, None)
+
         except Exception as e:
-            raise exceptions.AuthenticationFailed(f'User sync failed: {str(e)}')
+            # If Supabase returns 401 or any error, authentication fails.
+            print(f"DEBUG: Supabase Validation Failed: {str(e)}")
+            raise exceptions.AuthenticationFailed(f'Supabase Validation Failed: {str(e)}')

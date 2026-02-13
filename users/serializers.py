@@ -45,9 +45,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         Profile.objects.create(id=user, **profile_data)
         return user
 
-class LogoutSerializer(serializers.Serializer):
-    refresh = serializers.CharField()
-
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=False) # Optional because Supabase client might just clear storage
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    redirect_to = serializers.URLField(required=False)
+
+class PasswordChangeSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
