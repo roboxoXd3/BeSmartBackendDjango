@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.auth import get_user_model
 import uuid
+
+User = get_user_model()
 
 class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -36,3 +39,45 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ProductReview(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='product_reviews')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    order_id = models.UUIDField(null=True, blank=True)
+    rating = models.IntegerField()
+    title = models.CharField(max_length=255, null=True, blank=True)
+    content = models.TextField(null=True, blank=True)
+    images = ArrayField(models.TextField(), default=list, blank=True)
+    verified_purchase = models.BooleanField(default=False)
+    helpful_count = models.IntegerField(default=0)
+    reported_count = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, default='published')
+    vendor_response = models.TextField(null=True, blank=True)
+    vendor_response_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_reviews'
+
+
+class ProductQuestion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='product_qa')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    question = models.TextField()
+    answer = models.TextField(null=True, blank=True)
+    answered_by = models.UUIDField(null=True, blank=True)
+    answered_at = models.DateTimeField(null=True, blank=True)
+    is_helpful_count = models.IntegerField(default=0)
+    is_verified = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, default='published')
+    vendor_response = models.TextField(null=True, blank=True)
+    vendor_response_date = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_qa'

@@ -225,3 +225,58 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         
         user_serializer = UserSerializer(self.request.user)
         return Response(user_serializer.data)
+
+
+class AccountDeletionEligibilityView(APIView):
+    """GET /api/users/account/deletion-eligibility/"""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(summary="Check if account can be deleted")
+    def get(self, request):
+        from vendors.models import Vendor
+        vendor = Vendor.objects.filter(user=request.user, status='approved').first()
+        if vendor:
+            return Response({
+                "eligible": False,
+                "message": "Cannot delete account while you have an active vendor account. Please contact support.",
+                "is_vendor": True,
+                "error_code": "vendor_active"
+            })
+        return Response({
+            "eligible": True,
+            "message": "Your account is eligible for deletion.",
+            "is_vendor": False
+        })
+
+
+class AccountDeleteView(APIView):
+    """POST /api/users/account/delete/ — requires password"""
+    permission_classes = (permissions.IsAuthenticated,)
+
+    @extend_schema(request={'type': 'object', 'properties': {'password': {'type': 'string'}}}, responses={200: {'type': 'object'}})
+    def post(self, request):
+        from vendors.models import Vendor
+        password = request.data.get('password', '')
+        if not password:
+            return Response({"success": False, "error": "invalid_password", "message": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
+        vendor = Vendor.objects.filter(user=request.user, status='approved').first()
+        if vendor:
+            return Response({"success": False, "error": "vendor_active", "message": "Cannot delete account with active vendor."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            auth_response = get_supabase_client().auth.sign_in_with_password({"email": request.user.email, "password": password})
+            if not auth_response or not auth_response.user:
+                return Response({"success": False, "error": "invalid_password", "message": "Invalid password."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response({"success": False, "error": "invalid_password", "message": "Invalid password."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = request.user
+            if hasattr(user, 'profile'):
+                user.profile.delete()
+            user.email = f"deleted_{user.id}@deleted.local"
+            user.username = user.email
+            user.is_active = False
+            user.save()
+            get_supabase_client().auth.admin.delete_user(str(user.id))
+        except Exception as e:
+            return Response({"success": False, "error": "deletion_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"success": True, "message": "Your account has been successfully deleted."})

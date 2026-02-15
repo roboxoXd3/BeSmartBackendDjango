@@ -2,32 +2,30 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Django
-*.log
-local_settings.py
 db.sqlite3
 db.sqlite3-journal
+*.log
 media/
-static/
-staticfiles/
-
-# Environment
-.env
-.venv
-env/
-venv/
-ENV/
-
-# IDEs
-.idea/
-.vscode/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# User Exclusions
-products_schema.txt
-server.log
-debug_products_db.py
+# Secrets
+*.pem
+*.key
+credentials.json

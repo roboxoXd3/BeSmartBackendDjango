@@ -54,7 +54,7 @@ class LogoutSerializer(serializers.Serializer):
 
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    redirect_to = serializers.URLField(required=False)
+    redirect_to = serializers.CharField(required=False, allow_blank=True)
 
 class PasswordChangeSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)

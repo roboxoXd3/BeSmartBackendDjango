@@ -81,6 +81,47 @@ class CurrencyConversionView(views.APIView):
         
         return Response(serializer.errors, status=400)
 
+class CurrencyExchangeRateView(views.APIView):
+    """GET /api/currency/rate/?from=USD&to=NGN
+    Gap 28: getExchangeRate — return the effective rate between two currencies."""
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(responses={200: {'type': 'object'}})
+    def get(self, request):
+        from_currency = request.query_params.get('from', '').upper()
+        to_currency = request.query_params.get('to', '').upper()
+
+        if not from_currency or not to_currency:
+            return Response({"error": "Both 'from' and 'to' query params required."}, status=400)
+
+        try:
+            from_rate_obj = CurrencyRate.objects.get(currency_code=from_currency)
+            from_rate = from_rate_obj.exchange_rate
+        except CurrencyRate.DoesNotExist:
+            if from_currency == 'NGN':
+                from_rate = Decimal('1.0')
+            else:
+                return Response({"error": f"Currency {from_currency} not found"}, status=400)
+
+        try:
+            to_rate_obj = CurrencyRate.objects.get(currency_code=to_currency)
+            to_rate = to_rate_obj.exchange_rate
+        except CurrencyRate.DoesNotExist:
+            if to_currency == 'NGN':
+                to_rate = Decimal('1.0')
+            else:
+                return Response({"error": f"Currency {to_currency} not found"}, status=400)
+
+        # Rate = how many "to" units per 1 "from" unit
+        effective_rate = from_rate / to_rate
+
+        return Response({
+            "from_currency": from_currency,
+            "to_currency": to_currency,
+            "rate": round(effective_rate, 6),
+        })
+
+
 # Admin ViewSet for managing rates
 class CurrencyRateViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated] # Should be IsSuperAdmin

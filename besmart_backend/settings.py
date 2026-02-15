@@ -26,6 +26,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
+    # PostgreSQL extras
+    'django.contrib.postgres',
+    
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
@@ -47,6 +50,8 @@ INSTALLED_APPS = [
     'categories',
     'currency',
     'content',
+    'search',
+    'ai_services',
 ]
 
 MIDDLEWARE = [
@@ -256,6 +261,9 @@ else:
             "BACKEND": "channels.layers.InMemoryChannelLayer"
         }
     }
+
+# OpenAI
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = DEBUG

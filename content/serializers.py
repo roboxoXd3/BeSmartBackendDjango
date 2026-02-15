@@ -1,5 +1,15 @@
 from rest_framework import serializers
-from .models import PromotionalBanner, SupportInfo
+from .models import PromotionalBanner, SupportInfo, HeroSection, ContactInfo
+
+class HeroSectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HeroSection
+        fields = '__all__'
+
+class ContactInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactInfo
+        fields = '__all__'
 
 class PromotionalBannerSerializer(serializers.ModelSerializer):
     class Meta:

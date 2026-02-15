@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.contrib.postgres.fields import ArrayField
 from vendors.models import Vendor
 from admin_api.models import AdminUser
 import uuid
@@ -67,7 +68,7 @@ class ChatMessage(models.Model):
     )
     MESSAGE_TYPE_CHOICES = (
         ('text', 'Text'),
-        ('product', 'Product'),
+        ('product', 'Product'),       # singular — matches DB check constraint
         ('image', 'Image'),
         ('file', 'File'),
         ('quick_reply', 'Quick Reply'),
@@ -95,6 +96,22 @@ class ChatAnalytics(models.Model):
 
     class Meta:
         db_table = 'chat_analytics'
+
+class ConversationContext(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey(ChatConversation, on_delete=models.CASCADE, null=True, blank=True, related_name='context_entries')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    user_message = models.TextField()
+    intent_type = models.TextField()
+    intent_confidence = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    ai_response = models.TextField()
+    extracted_info = models.TextField(null=True, blank=True)
+    products_mentioned = ArrayField(models.UUIDField(), default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
+    class Meta:
+        db_table = 'conversation_context'
+
 
 class ContactBranch(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

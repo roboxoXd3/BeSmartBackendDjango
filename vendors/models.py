@@ -185,6 +185,17 @@ class VendorSizeChartTemplate(models.Model):
     class Meta:
         db_table = 'vendor_size_chart_templates'
 
+class VendorFollow(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'vendor_follows'
+        unique_together = [['user', 'vendor']]
+
+
 class EscrowTransaction(models.Model):
     """Track escrow transactions linking orders to payouts"""
     

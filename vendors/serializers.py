@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Vendor, VendorReview, VendorBankAccount, VendorPayout, 
     PayoutTransaction, SubscriptionPlan, VendorSubscription, 
-    VendorSizeChartTemplate
+    VendorSizeChartTemplate, VendorFollow
 )
 from users.serializers import UserSerializer
 
@@ -35,6 +35,33 @@ class VendorBankAccountSerializer(serializers.ModelSerializer):
         
         return attrs
 
+class VendorListSerializer(serializers.ModelSerializer):
+    """Lightweight for customer-facing list/featured/search."""
+    class Meta:
+        model = Vendor
+        fields = [
+            'id', 'business_name', 'business_description', 'business_logo',
+            'average_rating', 'total_reviews', 'is_featured'
+        ]
+
+
+class VendorDetailSerializer(serializers.ModelSerializer):
+    """Detail for customer vendor profile (no sensitive data)."""
+    follower_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Vendor
+        fields = [
+            'id', 'business_name', 'business_description', 'business_logo',
+            'business_email', 'business_phone', 'business_address',
+            'average_rating', 'total_reviews', 'is_featured', 'created_at',
+            'follower_count',
+        ]
+
+    def get_follower_count(self, obj):
+        return obj.followers.count()
+
+
 class VendorSerializer(serializers.ModelSerializer):
     bank_accounts = VendorBankAccountSerializer(many=True, read_only=True)
     
@@ -64,6 +91,17 @@ class VendorReviewSerializer(serializers.ModelSerializer):
         model = VendorReview
         fields = '__all__'
         read_only_fields = ['user', 'vendor', 'created_at', 'updated_at']
+
+
+class VendorReviewCreateSerializer(serializers.ModelSerializer):
+    """Create review - only rating and review_text from customer."""
+    class Meta:
+        model = VendorReview
+        fields = ['rating', 'review_text']
+        extra_kwargs = {
+            'rating': {'min_value': 1, 'max_value': 5},
+            'review_text': {'required': False, 'allow_blank': True},
+        }
 
 class PayoutTransactionSerializer(serializers.ModelSerializer):
     class Meta:

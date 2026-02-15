@@ -16,6 +16,50 @@ class PaymentMethodListView(generics.ListCreateAPIView):
             return PaymentMethod.objects.none()
         return PaymentMethod.objects.filter(user=self.request.user)
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class PaymentMethodDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """GET/PATCH/DELETE /api/payments/methods/{id}/
+    Gaps 21+22: updatePaymentMethod + deletePaymentMethod."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PaymentMethodSerializer
+    lookup_field = 'pk'
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PaymentMethod.objects.none()
+        return PaymentMethod.objects.filter(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        was_default = instance.is_default
+        user = instance.user
+        instance.delete()
+        # If deleted card was default, promote the first remaining
+        if was_default:
+            first = PaymentMethod.objects.filter(user=user).first()
+            if first:
+                first.is_default = True
+                first.save(update_fields=['is_default'])
+
+
+class PaymentMethodSetDefaultView(views.APIView):
+    """POST /api/payments/methods/{id}/set-default/
+    Gap 23: setDefaultPaymentMethod."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(request=None, responses={200: {'type': 'object'}})
+    def post(self, request, pk):
+        from django.db import transaction
+        method = get_object_or_404(PaymentMethod, pk=pk, user=request.user)
+        with transaction.atomic():
+            PaymentMethod.objects.filter(user=request.user, is_default=True).update(is_default=False)
+            method.is_default = True
+            method.save(update_fields=['is_default'])
+        return Response({'success': True, 'message': 'Default payment method updated.'})
+
+
 from .serializers import PaymentSerializer
 from rest_framework import viewsets
 

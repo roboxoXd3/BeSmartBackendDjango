@@ -96,6 +96,29 @@ class Order(models.Model):
         random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
         return f"{prefix}{random_part}"
 
+class ShippingAddress(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='shipping_addresses')
+    name = models.TextField()
+    phone = models.TextField()
+    address_line1 = models.TextField()
+    address_line2 = models.TextField(blank=True, null=True)
+    city = models.TextField()
+    state = models.TextField()
+    zip = models.TextField()
+    country = models.TextField(blank=True, null=True)
+    is_default = models.BooleanField(default=False)
+    type = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'shipping_addresses'
+        ordering = ['-is_default', '-created_at']
+
+    def __str__(self):
+        return f"{self.name} - {self.address_line1}, {self.city}"
+
+
 class OrderItem(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')

@@ -5,6 +5,41 @@ from admin_api.models import AdminUser
 
 User = get_user_model()
 
+
+class HeroSection(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    trusted_by_text = models.TextField(null=True, blank=True)
+    headline = models.TextField()
+    headline_highlight = models.TextField(null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    media_type = models.CharField(max_length=50, null=True, blank=True)
+    media_url = models.TextField(null=True, blank=True)
+    image_url = models.TextField(null=True, blank=True)
+    video_url = models.TextField(null=True, blank=True)
+    primary_button = models.JSONField(default=dict)
+    secondary_button = models.JSONField(default=dict)
+    features = models.JSONField(default=list)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hero_section'
+
+
+class ContactInfo(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contact = models.JSONField(default=dict)
+    office = models.JSONField(default=dict)
+    customer_service_promise = models.JSONField(default=dict)
+    social_media = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'contact_info'
+
+
 class PromotionalBanner(models.Model):
     BANNER_SIZE_CHOICES = (
         ('small', 'Small'),
