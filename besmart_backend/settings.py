@@ -17,6 +17,15 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# Railway provides RAILWAY_PUBLIC_DOMAIN at runtime — add it automatically
+RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+if RAILWAY_PUBLIC_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+
+# Also allow .railway.app subdomains for convenience
+if '.up.railway.app' not in str(ALLOWED_HOSTS):
+    ALLOWED_HOSTS.append('.railway.app')
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -272,3 +281,15 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",
     "http://localhost:3002",
 ]
+if RAILWAY_PUBLIC_DOMAIN:
+    CORS_ALLOWED_ORIGINS.append(f"https://{RAILWAY_PUBLIC_DOMAIN}")
+
+# CSRF Trusted Origins (required for Railway)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+]
+if RAILWAY_PUBLIC_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RAILWAY_PUBLIC_DOMAIN}")
+CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
