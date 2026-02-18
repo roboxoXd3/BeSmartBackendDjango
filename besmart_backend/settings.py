@@ -296,4 +296,4 @@ CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
 
 # Squad Payment Gateway
 SQUAD_SECRET_KEY = os.environ.get('SQUAD_PRIVATE_KEY', os.environ.get('SQUAD_SECRET_KEY', ''))
-SQUAD_BASE_URL = os.environ.get('SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com')
+SQUAD_BASE_URL = os.environ.get('SQUAD_BASE_URL', 'https://api-d.squadco.com')

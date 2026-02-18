@@ -94,7 +94,7 @@ class InitiatePaymentView(views.APIView):
 
         # Call Squad API server-side (secret key stays on server)
         squad_secret_key = getattr(settings, 'SQUAD_SECRET_KEY', '')
-        squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com')
+        squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://api-d.squadco.com')
 
         # Convert amount to smallest currency unit (kobo for NGN)
         amount_in_kobo = int(amount * 100)
@@ -154,7 +154,7 @@ class VerifyPaymentView(views.APIView):
         transaction_ref = ref
 
         squad_secret_key = getattr(settings, 'SQUAD_SECRET_KEY', '')
-        squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com')
+        squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://api-d.squadco.com')
 
         try:
             squad_response = http_requests.get(

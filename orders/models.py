@@ -76,6 +76,7 @@ class Order(models.Model):
     
     # Payment & Loyalty info from schema
     squad_transaction_ref = models.CharField(max_length=255, null=True, blank=True)
+    squad_gateway_ref = models.CharField(max_length=255, null=True, blank=True)
     payment_status = models.CharField(max_length=50, default='pending')
     loyalty_points_earned = models.IntegerField(default=0)
     
