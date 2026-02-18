@@ -227,6 +227,43 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return Response(user_serializer.data)
 
 
+class TokenRefreshView(APIView):
+    """POST /api/users/token/refresh/ — refresh Supabase access token"""
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(
+        summary="Refresh access token using refresh_token",
+        request={'type': 'object', 'properties': {'refresh_token': {'type': 'string'}}},
+        responses={200: {'type': 'object'}},
+    )
+    def post(self, request):
+        refresh_token = request.data.get('refresh_token')
+        if not refresh_token:
+            return Response(
+                {"error": "refresh_token is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            supabase = get_supabase_client()
+            auth_response = supabase.auth.refresh_session(refresh_token)
+            session = auth_response.session
+            if session is None:
+                return Response(
+                    {"error": "Failed to refresh session."},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            return Response({
+                "access_token": session.access_token,
+                "refresh_token": session.refresh_token,
+                "expires_in": session.expires_in,
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+
 class AccountDeletionEligibilityView(APIView):
     """GET /api/users/account/deletion-eligibility/"""
     permission_classes = (permissions.IsAuthenticated,)
