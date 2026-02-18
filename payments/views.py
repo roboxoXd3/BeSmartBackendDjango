@@ -1,11 +1,13 @@
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 from .models import PaymentMethod, PaymentWebhook
 from .serializers import PaymentMethodSerializer, InitiatePaymentSerializer, VerifyPaymentSerializer
 from orders.models import Order
 from drf_spectacular.utils import extend_schema
 import uuid
+import requests as http_requests
 
 class PaymentMethodListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -78,29 +80,69 @@ class InitiatePaymentView(views.APIView):
     def post(self, request):
         serializer = InitiatePaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         order_id = serializer.validated_data['order_id']
-        amount = serializer.validated_data['amount']
-        email = serializer.validated_data['email']
-        
-        # Verify order exists
+        currency = serializer.validated_data.get('currency', 'NGN')
+
+        # Always derive amount and email from the verified order — never trust client
         order = get_object_or_404(Order, id=order_id, user=request.user)
-        
-        # Mock interaction with Payment Gateway (Squad)
-        # In real implementation, this would make a request to Squad API
-        transaction_ref = f"SQ-{uuid.uuid4()}"
-        checkout_url = f"https://sandbox.squadco.com/pay?ref={transaction_ref}"
-        
-        # Update order with transaction ref
+        amount = float(order.total)
+        email = serializer.validated_data.get('email') or request.user.email
+
+        # Generate a unique transaction reference
+        transaction_ref = f"BESMART-{uuid.uuid4().hex[:16].upper()}"
+
+        # Call Squad API server-side (secret key stays on server)
+        squad_secret_key = getattr(settings, 'SQUAD_SECRET_KEY', '')
+        squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com')
+
+        # Convert amount to smallest currency unit (kobo for NGN)
+        amount_in_kobo = int(amount * 100)
+
+        try:
+            squad_response = http_requests.post(
+                f"{squad_base_url}/transaction/initiate",
+                json={
+                    'amount': amount_in_kobo,
+                    'email': email,
+                    'currency': currency,
+                    'initiate_type': 'inline',
+                    'transaction_ref': transaction_ref,
+                },
+                headers={
+                    'Authorization': f'Bearer {squad_secret_key}',
+                    'Content-Type': 'application/json',
+                },
+                timeout=30,
+            )
+            squad_data = squad_response.json()
+
+            if squad_response.status_code == 200 and squad_data.get('status') == 200:
+                checkout_url = squad_data['data']['checkout_url']
+                transaction_ref = squad_data['data'].get('transaction_ref', transaction_ref)
+            else:
+                # Squad API call failed — return error with Squad's message
+                return Response({
+                    'status': 'error',
+                    'message': squad_data.get('message', 'Payment gateway error'),
+                }, status=status.HTTP_502_BAD_GATEWAY)
+
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Could not reach payment gateway: {str(e)}',
+            }, status=status.HTTP_502_BAD_GATEWAY)
+
+        # Save transaction ref on the order
         order.squad_transaction_ref = transaction_ref
-        order.save()
+        order.save(update_fields=['squad_transaction_ref'])
 
         return Response({
             "status": "success",
             "message": "Payment initiated",
             "data": {
                 "transaction_ref": transaction_ref,
-                "checkout_url": checkout_url, # Frontend redirects here
+                "checkout_url": checkout_url,
             }
         })
 
@@ -110,27 +152,53 @@ class VerifyPaymentView(views.APIView):
     @extend_schema(responses={200: None})
     def get(self, request, ref):
         transaction_ref = ref
-        
-        # Mock verification logic
-        # 1. Call Squad API to verify transaction_ref
-        # 2. Check status matches 'success'
-        
-        # Simulating success
-        success = True 
-        
-        if success:
+
+        squad_secret_key = getattr(settings, 'SQUAD_SECRET_KEY', '')
+        squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://sandbox-api-d.squadco.com')
+
+        try:
+            squad_response = http_requests.get(
+                f"{squad_base_url}/transaction/verify/{transaction_ref}",
+                headers={
+                    'Authorization': f'Bearer {squad_secret_key}',
+                    'Content-Type': 'application/json',
+                },
+                timeout=20,
+            )
+            squad_data = squad_response.json()
+            payment_status = squad_data.get('data', {}).get('transaction_status', '')
+            gateway_ref = squad_data.get('data', {}).get('gateway_transaction_ref', '')
+            is_successful = payment_status.lower() == 'success'
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Could not reach payment gateway: {str(e)}',
+            }, status=status.HTTP_502_BAD_GATEWAY)
+
+        if is_successful:
             try:
                 order = Order.objects.get(squad_transaction_ref=transaction_ref)
                 if order.payment_status != 'paid':
                     order.payment_status = 'paid'
-                    order.status = 'confirmed' # Move from pending to confirmed
+                    order.status = 'confirmed'
+                    if gateway_ref:
+                        order.squad_gateway_ref = gateway_ref
                     order.save()
-                    return Response({"status": "success", "message": "Payment verified and order confirmed"})
-                return Response({"status": "success", "message": "Payment already verified"})
+                return Response({
+                    "status": "success",
+                    "message": "Payment verified and order confirmed",
+                    "gateway_ref": gateway_ref,
+                })
             except Order.DoesNotExist:
-                return Response({"status": "error", "message": "Order not found for ref"}, status=status.HTTP_404_NOT_FOUND)
-        
-        return Response({"status": "error", "message": "Payment verification failed"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"status": "error", "message": "Order not found for this reference"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        return Response(
+            {"status": "error", "message": f"Payment not successful. Status: {payment_status}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 class PaymentWebhookView(views.APIView):
     permission_classes = [permissions.AllowAny] # Webhooks come from external service

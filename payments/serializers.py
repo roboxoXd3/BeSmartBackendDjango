@@ -22,7 +22,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class InitiatePaymentSerializer(serializers.Serializer):
     order_id = serializers.UUIDField()
-    
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    email = serializers.EmailField(required=False)
+    currency = serializers.CharField(max_length=10, required=False, default='NGN')
+
     def validate_order_id(self, value):
         try:
             order = Order.objects.get(id=value)
