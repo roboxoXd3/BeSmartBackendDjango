@@ -12,6 +12,7 @@ class ProductListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     queryset = Product.objects.all().filter(status='active', approval_status='approved')
     serializer_class = ProductListSerializer
+    pagination_class = None
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
     # Filter fields
