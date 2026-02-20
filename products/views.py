@@ -9,6 +9,7 @@ from .serializers import ProductListSerializer, ProductDetailSerializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 class ProductListView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
     queryset = Product.objects.all().filter(status='active', approval_status='approved')
     serializer_class = ProductListSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -43,25 +44,30 @@ class ProductListView(generics.ListAPIView):
         return super().get(request, *args, **kwargs)
 
 class ProductDetailView(generics.RetrieveAPIView):
+    permission_classes = [permissions.AllowAny]
     queryset = Product.objects.all()
     serializer_class = ProductDetailSerializer
     lookup_field = 'id'
 
 class FeaturedProductsView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
     queryset = Product.objects.filter(is_featured=True, status='active', approval_status='approved')
     serializer_class = ProductListSerializer
-    pagination_class = None # Usually featured list is small
+    pagination_class = None
 
 class NewArrivalsView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
     queryset = Product.objects.filter(is_new_arrival=True, status='active', approval_status='approved').order_by('-added_date')
     serializer_class = ProductListSerializer
     pagination_class = None
 
 class OnSaleProductsView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
     queryset = Product.objects.filter(is_on_sale=True, status='active', approval_status='approved')
     serializer_class = ProductListSerializer
 
 class ProductSearchView(generics.ListAPIView):
+    permission_classes = [permissions.AllowAny]
     serializer_class = ProductListSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'description', 'brand']
