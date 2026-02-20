@@ -17,13 +17,33 @@ import uuid
 import random
 import string
 
-class LoyaltyPointsView(generics.RetrieveAPIView):
+class LoyaltyPointsView(views.APIView):
+    """GET /api/loyalty/points/ — balance + inline tier info so the client
+    doesn't need a second request to /tier-info/."""
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = LoyaltyPointsSerializer
 
-    def get_object(self):
-        obj, created = LoyaltyPoints.objects.get_or_create(user=self.request.user)
-        return obj
+    TIERS = [('bronze', 0), ('silver', 500), ('gold', 2000), ('platinum', 5000)]
+    TIER_MULTIPLIERS = {'bronze': 1.0, 'silver': 1.25, 'gold': 1.5, 'platinum': 2.0}
+
+    @extend_schema(responses={200: LoyaltyPointsSerializer})
+    def get(self, request):
+        lp, _ = LoyaltyPoints.objects.get_or_create(user=request.user)
+        data = LoyaltyPointsSerializer(lp).data
+
+        tier = lp.tier or 'bronze'
+        lifetime = lp.lifetime_points or 0
+        idx = next((i for i, (t, _) in enumerate(self.TIERS) if t == tier), 0)
+        next_tier = self.TIERS[idx + 1] if idx + 1 < len(self.TIERS) else None
+        pts_to_next = max(0, (next_tier[1] - lifetime)) if next_tier else 0
+        tier_range = (next_tier[1] - self.TIERS[idx][1]) if next_tier and next_tier[1] > self.TIERS[idx][1] else 1
+        tier_progress = min(100.0, (lifetime - self.TIERS[idx][1]) / tier_range * 100) if next_tier else 100.0
+
+        data['tier_multiplier'] = self.TIER_MULTIPLIERS.get(tier, 1.0)
+        data['tier_progress'] = round(tier_progress, 1)
+        data['next_tier'] = next_tier[0] if next_tier else None
+        data['points_to_next_tier'] = pts_to_next
+
+        return Response(data)
 
 class LoyaltyTransactionListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -188,17 +208,18 @@ class TierInfoView(views.APIView):
     @extend_schema(responses={200: {'type': 'object'}})
     def get(self, request):
         lp, _ = LoyaltyPoints.objects.get_or_create(user=request.user)
-        tiers = [('bronze', 0), ('silver', 500), ('gold', 2000), ('platinum', 5000)]
-        mult = {'bronze': 1.0, 'silver': 1.25, 'gold': 1.5, 'platinum': 2.0}
+        tiers = LoyaltyPointsView.TIERS
+        mult = LoyaltyPointsView.TIER_MULTIPLIERS
         tier = lp.tier or 'bronze'
         lifetime = lp.lifetime_points or 0
-        idx = next(i for i, (t, _) in enumerate(tiers) if t == tier)
+        idx = next((i for i, (t, _) in enumerate(tiers) if t == tier), 0)
         next_tier = tiers[idx + 1] if idx + 1 < len(tiers) else None
-        pts_to_next = (next_tier[1] - lifetime) if next_tier else 0
-        next_prog = (lifetime - tiers[idx][1]) / (next_tier[1] - tiers[idx][1]) * 100 if next_tier and next_tier[1] > tiers[idx][1] else 100
+        pts_to_next = max(0, (next_tier[1] - lifetime)) if next_tier else 0
+        tier_range = (next_tier[1] - tiers[idx][1]) if next_tier and next_tier[1] > tiers[idx][1] else 1
+        next_prog = min(100.0, (lifetime - tiers[idx][1]) / tier_range * 100) if next_tier else 100
         return Response({
             "tier": tier, "tier_multiplier": mult.get(tier, 1.0),
             "tier_progress": round(next_prog, 1), "next_tier": next_tier[0] if next_tier else None,
-            "points_to_next_tier": max(0, pts_to_next), "lifetime_points": lifetime,
+            "points_to_next_tier": pts_to_next, "lifetime_points": lifetime,
             "points_balance": lp.points_balance or 0
         })

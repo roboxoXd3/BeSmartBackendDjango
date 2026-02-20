@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db import transaction
+from django.db import models, transaction
 from .models import Cart, CartItem, Order, OrderItem, Wishlist, ShippingAddress
 from products.models import Product
 from .serializers import (
@@ -423,13 +423,15 @@ class OrderPaymentStatusView(views.APIView):
 
 class OrderStatusUpdateView(views.APIView):
     """PATCH /api/orders/{id}/status/
-    Gap 26: updateOrderStatus — general status update."""
+    Gap 26: updateOrderStatus — general status update.
+    Awards loyalty points automatically when status becomes 'delivered'."""
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         request={'type': 'object', 'properties': {'status': {'type': 'string'}}},
         responses={200: {'type': 'object'}},
     )
+    @transaction.atomic
     def patch(self, request, id):
         order = get_object_or_404(Order, id=id, user=request.user)
         new_status = request.data.get('status', '').strip()
@@ -439,12 +441,86 @@ class OrderStatusUpdateView(views.APIView):
                 {'error': f'Invalid status. Choices: {list(valid_statuses)}'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        previous_status = order.status
         order.status = new_status
         order.save(update_fields=['status', 'updated_at'])
-        return Response({
+
+        points_awarded = 0
+        if new_status == 'delivered' and previous_status != 'delivered':
+            points_awarded = self._award_loyalty_points(order)
+
+        resp = {
             'success': True,
             'order': OrderSerializer(order).data,
-        })
+        }
+        if points_awarded:
+            resp['loyalty_points_awarded'] = points_awarded
+        return Response(resp)
+
+    @staticmethod
+    def _award_loyalty_points(order):
+        """Award loyalty points for a delivered order based on earning rules
+        and the user's tier multiplier."""
+        from loyalty.models import LoyaltyPoints, LoyaltyTransaction, LoyaltyEarningRule
+        from django.utils import timezone
+
+        rule = LoyaltyEarningRule.objects.filter(
+            rule_type='order_purchase',
+            is_active=True,
+        ).filter(
+            models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=timezone.now()),
+        ).filter(
+            models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=timezone.now()),
+        ).order_by('-multiplier').first()
+
+        if not rule:
+            points_per_unit = 1.0
+            rule_multiplier = 1.0
+            min_order = 0
+        else:
+            points_per_unit = float(rule.points_per_currency_unit)
+            rule_multiplier = float(rule.multiplier)
+            min_order = float(rule.minimum_order_amount)
+
+        order_total = float(order.total)
+        if order_total < min_order:
+            return 0
+
+        tier_multipliers = {'bronze': 1.0, 'silver': 1.25, 'gold': 1.5, 'platinum': 2.0}
+        lp, _ = LoyaltyPoints.objects.get_or_create(user=order.user)
+        tier_mult = tier_multipliers.get(lp.tier or 'bronze', 1.0)
+
+        raw_points = int(order_total * points_per_unit * rule_multiplier * tier_mult)
+        if raw_points <= 0:
+            return 0
+
+        lp.points_balance = (lp.points_balance or 0) + raw_points
+        lp.lifetime_points = (lp.lifetime_points or 0) + raw_points
+
+        tiers = [('bronze', 0), ('silver', 500), ('gold', 2000), ('platinum', 5000)]
+        new_tier = 'bronze'
+        for t_name, t_threshold in reversed(tiers):
+            if lp.lifetime_points >= t_threshold:
+                new_tier = t_name
+                break
+        if new_tier != (lp.tier or 'bronze'):
+            lp.tier = new_tier
+            lp.tier_updated_at = timezone.now()
+
+        lp.save()
+
+        LoyaltyTransaction.objects.create(
+            user=order.user,
+            points_change=raw_points,
+            transaction_type='earn',
+            reference_type='order',
+            reference_id=order.id,
+            description=f'Earned {raw_points} points for order #{order.order_number}',
+            points_balance_after=lp.points_balance,
+        )
+
+        return raw_points
 
 
 class OrderTrackView(views.APIView):
