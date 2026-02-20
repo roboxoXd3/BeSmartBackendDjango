@@ -9,6 +9,18 @@ from products.models import Product
 from products.serializers import ProductListSerializer
 from drf_spectacular.utils import extend_schema
 
+class SubcategoryListView(generics.ListAPIView):
+    """GET /api/subcategories/ — all active subcategories (Flutter fetches all at once
+    and filters client-side by category_id)."""
+    permission_classes = [permissions.AllowAny]
+    serializer_class = SubcategorySerializer
+    queryset = Subcategory.objects.filter(is_active=True).select_related('category').order_by('name')
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
+
+
 class CategorySubcategoriesView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = SubcategorySerializer

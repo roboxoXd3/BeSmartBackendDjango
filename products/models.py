@@ -17,7 +17,8 @@ class Product(models.Model):
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     reviews = models.IntegerField(default=0)
     in_stock = models.BooleanField(default=True)
-    category_id = models.UUIDField(null=True, blank=True) # Foreign Key logic to be added later or linked to Category model
+    category_id = models.UUIDField(null=True, blank=True)
+    subcategory_id = models.UUIDField(null=True, blank=True)
     brand = models.TextField(null=True, blank=True)
     discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     is_on_sale = models.BooleanField(default=False)

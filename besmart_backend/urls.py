@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/admin/', include('admin_api.urls')),
     path('api/support/', include('support.urls')),
     path('api/categories/', include('categories.urls')),
+    path('api/subcategories/', include('categories.subcategory_urls')),
     path('api/currency/', include('currency.urls')),
     path('api/content/', include('content.urls')),
     path('api/reviews/', include('products.review_urls')),
