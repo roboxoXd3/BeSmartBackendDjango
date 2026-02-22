@@ -26,4 +26,5 @@ urlpatterns = [
     path('api/content/', include('content.urls')),
     path('api/reviews/', include('products.review_urls')),
     path('api/search/analytics/', include('search.urls')),
+    path('api/ai/', include('ai_services.urls')),
 ]
