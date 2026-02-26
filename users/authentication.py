@@ -5,6 +5,23 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+try:
+    from drf_spectacular.extensions import OpenApiAuthenticationExtension
+
+    class SupabaseAuthenticationScheme(OpenApiAuthenticationExtension):
+        target_class = 'users.authentication.SupabaseAuthentication'
+        name = 'bearerAuth'  # standard name for UI
+
+        def get_security_definition(self, auto_schema):
+            return {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+except ImportError:
+    pass
+
+
 class SupabaseAuthentication(authentication.BaseAuthentication):
     """
     Validates Supabase JWTs and syncs the user to Django.

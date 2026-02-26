@@ -7,7 +7,8 @@ from .models import Category, Subcategory
 from .serializers import CategorySerializer, SubcategorySerializer
 from products.models import Product
 from products.serializers import ProductListSerializer
-from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 class SubcategoryListView(generics.ListAPIView):
     """GET /api/subcategories/ — all active subcategories (Flutter fetches all at once
@@ -26,6 +27,8 @@ class CategorySubcategoriesView(generics.ListAPIView):
     serializer_class = SubcategorySerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Subcategory.objects.none()
         category = get_object_or_404(Category, id=self.kwargs['id'], is_active=True)
         return Subcategory.objects.filter(category=category, is_active=True).order_by('name')
 
@@ -38,6 +41,8 @@ class CategoryProductsView(generics.ListAPIView):
     serializer_class = ProductListSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Product.objects.none()
         get_object_or_404(Category, id=self.kwargs['id'], is_active=True)
         return Product.objects.filter(category_id=self.kwargs['id'], status='active', approval_status='approved')
 
@@ -74,6 +79,10 @@ class CategorySizeChartView(views.APIView):
     Gap 13: getSizeChartByCategory — return size chart template for a category."""
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        summary="Get Category Size Chart",
+        responses={200: inline_serializer(name="CategorySizeChartRes", fields={"id": serializers.UUIDField(), "name": serializers.CharField(), "entries": serializers.ListField()})}
+    )
     def get(self, request, id):
         category = get_object_or_404(Category, id=id, is_active=True)
         with connection.cursor() as c:
@@ -113,6 +122,10 @@ class CategoryHasSizeChartView(views.APIView):
     Gap 15: hasSizeChartForCategory — boolean check."""
     permission_classes = [permissions.AllowAny]
 
+    @extend_schema(
+        summary="Check if category has size chart",
+        responses={200: inline_serializer(name="CategoryHasSizeChartRes", fields={"has_size_chart": serializers.BooleanField()})}
+    )
     def get(self, request, id):
         category = get_object_or_404(Category, id=id, is_active=True)
         with connection.cursor() as c:

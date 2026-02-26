@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from .serializers import RegisterSerializer, UserSerializer, ProfileSerializer, LogoutSerializer, LoginSerializer, PasswordResetSerializer, PasswordChangeSerializer
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
 from django.conf import settings
 from supabase import create_client, Client
 
@@ -80,7 +80,7 @@ class LoginView(APIView):
     @extend_schema(
         summary="Login User (Proxy to Supabase)",
         request=LoginSerializer,
-        responses={200: serializers.Serializer}
+        responses={200: inline_serializer(name="LoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "session": serializers.DictField()})}
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -119,11 +119,123 @@ class LoginView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
+class VendorLoginView(APIView):
+    permission_classes = (permissions.AllowAny,)
+    serializer_class = LoginSerializer
+
+    @extend_schema(
+        summary="Vendor specific login",
+        request=LoginSerializer,
+        responses={200: inline_serializer(name="VendorLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "session": serializers.DictField()})}
+    )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+             
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        try:
+            supabase = get_supabase_client()
+            auth_response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            user_data = auth_response.user
+            session_data = auth_response.session
+            
+            if user_data:
+                # Sync local user
+                user, created = User.objects.get_or_create(
+                    id=user_data.id,
+                    defaults={
+                        'email': user_data.email,
+                        'username': user_data.email
+                    }
+                )
+                from vendors.models import Vendor
+                vendor = Vendor.objects.filter(user=user).first()
+                if not vendor:
+                    return Response({"error": "This account is not registered as a vendor."}, status=status.HTTP_403_FORBIDDEN)
+                
+            return Response({
+                "message": "Vendor logic successful.",
+                "user": {
+                    "id": user_data.id, 
+                    "email": user_data.email, 
+                    "vendor_id": vendor.id, 
+                    "vendor_status": vendor.status
+                },
+                "session": session_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+
+class AdminLoginView(APIView):
+    permission_classes = (permissions.AllowAny,)
+    serializer_class = LoginSerializer
+
+    @extend_schema(
+        summary="Admin specific login",
+        request=LoginSerializer,
+        responses={200: inline_serializer(name="AdminLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "session": serializers.DictField()})}
+    )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+             
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+
+        try:
+            supabase = get_supabase_client()
+            auth_response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            user_data = auth_response.user
+            session_data = auth_response.session
+            
+            if user_data:
+                # Sync local user
+                user, created = User.objects.get_or_create(
+                    id=user_data.id,
+                    defaults={
+                        'email': user_data.email,
+                        'username': user_data.email
+                    }
+                )
+                if not user.is_staff:
+                    return Response({"error": "This account does not have admin privileges."}, status=status.HTTP_403_FORBIDDEN)
+                
+            return Response({
+                "message": "Admin login successful.",
+                "user": {
+                    "id": user_data.id, 
+                    "email": user_data.email, 
+                    "is_staff": user.is_staff,
+                    "is_superuser": user.is_superuser
+                },
+                "session": session_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+
+
 class LogoutView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = LogoutSerializer
 
-    @extend_schema(summary="Logout User (Invalidate Supabase Session)")
+    @extend_schema(
+        summary="Logout User (Invalidate Supabase Session)",
+        responses={200: inline_serializer(name="LogoutResponse", fields={"message": serializers.CharField()})}
+    )
     def post(self, request):
         try:
             # We strictly proxy to Supabase for logout if possible.
@@ -233,8 +345,8 @@ class TokenRefreshView(APIView):
 
     @extend_schema(
         summary="Refresh access token using refresh_token",
-        request={'type': 'object', 'properties': {'refresh_token': {'type': 'string'}}},
-        responses={200: {'type': 'object'}},
+        request=inline_serializer(name="TokenRefreshReq", fields={"refresh_token": serializers.CharField()}),
+        responses={200: inline_serializer(name="TokenRefreshRes", fields={"access_token": serializers.CharField(), "refresh_token": serializers.CharField(), "expires_in": serializers.IntegerField()})},
     )
     def post(self, request):
         refresh_token = request.data.get('refresh_token')
@@ -268,7 +380,10 @@ class AccountDeletionEligibilityView(APIView):
     """GET /api/users/account/deletion-eligibility/"""
     permission_classes = (permissions.IsAuthenticated,)
 
-    @extend_schema(summary="Check if account can be deleted")
+    @extend_schema(
+        summary="Check if account can be deleted",
+        responses={200: inline_serializer(name="AccountDeletionEligibilityRes", fields={"eligible": serializers.BooleanField(), "message": serializers.CharField(), "is_vendor": serializers.BooleanField(), "error_code": serializers.CharField(required=False)})}
+    )
     def get(self, request):
         from vendors.models import Vendor
         vendor = Vendor.objects.filter(user=request.user, status='approved').first()
@@ -290,7 +405,11 @@ class AccountDeleteView(APIView):
     """POST /api/users/account/delete/ — requires password"""
     permission_classes = (permissions.IsAuthenticated,)
 
-    @extend_schema(request={'type': 'object', 'properties': {'password': {'type': 'string'}}}, responses={200: {'type': 'object'}})
+    @extend_schema(
+        summary="Delete Account",
+        request=inline_serializer(name="AccountDeleteReq", fields={"password": serializers.CharField()}), 
+        responses={200: inline_serializer(name="AccountDeleteRes", fields={"success": serializers.BooleanField(), "message": serializers.CharField()})}
+    )
     def post(self, request):
         from vendors.models import Vendor
         password = request.data.get('password', '')

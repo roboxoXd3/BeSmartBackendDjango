@@ -9,13 +9,19 @@ import logging
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from . import intent_service, product_search_service, response_service, image_analysis_service
 
 logger = logging.getLogger(__name__)
 
 
+@extend_schema(
+    summary="AI Chat endpoint",
+    request=inline_serializer("AIChatReq", {"message": serializers.CharField(), "conversation_context": serializers.ListField(child=serializers.DictField(), required=False)}),
+    responses={200: inline_serializer("AIChatRes", {"text": serializers.CharField(), "products": serializers.ListField(child=serializers.DictField()), "suggestions": serializers.ListField(child=serializers.CharField()), "intent": serializers.DictField()})}
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def chat(request):
@@ -73,6 +79,11 @@ def chat(request):
         )
 
 
+@extend_schema(
+    summary="AI Image Analysis",
+    request=inline_serializer("AIImageReq", {"image": serializers.FileField()}),
+    responses={200: inline_serializer("AIImageRes", {"description": serializers.CharField(), "products": serializers.ListField(child=serializers.DictField())})}
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def analyze_image(request):

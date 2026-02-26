@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions, status, views
+from rest_framework import generics, permissions, status, views, serializers
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -12,7 +12,7 @@ from .serializers import (
     LoyaltyRewardSerializer, LoyaltyVoucherSerializer, 
     LoyaltyBadgeSerializer, RedeemRewardSerializer
 )
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
 import uuid
 import random
 import string
@@ -125,8 +125,26 @@ class RedeemRewardView(views.APIView):
 class ValidateVoucherView(views.APIView):
     """POST /api/loyalty/validate-voucher/"""
     permission_classes = [permissions.IsAuthenticated]
-
-    @extend_schema(request={'type': 'object', 'properties': {'voucher_code': {'type': 'string'}, 'order_subtotal': {'type': 'number'}, 'voucherCode': {'type': 'string'}, 'orderAmount': {'type': 'number'}}}, responses={200: {'type': 'object'}})
+    @extend_schema(
+        summary="Validate Voucher",
+        request=inline_serializer("ValidateVoucherReq", {
+            "voucher_code": serializers.CharField(required=False),
+            "order_subtotal": serializers.FloatField(required=False),
+            "voucherCode": serializers.CharField(required=False),
+            "orderAmount": serializers.FloatField(required=False)
+        }),
+        responses={200: inline_serializer("ValidateVoucherRes", {
+            "valid": serializers.BooleanField(),
+            "error": serializers.CharField(required=False),
+            "voucher_id": serializers.CharField(required=False),
+            "voucher_code": serializers.CharField(required=False),
+            "discount_type": serializers.CharField(required=False),
+            "discount_amount": serializers.FloatField(required=False),
+            "discount_value": serializers.FloatField(required=False),
+            "apply_to_shipping": serializers.BooleanField(required=False),
+            "minimum_order_amount": serializers.FloatField(required=False)
+        })}
+    )
     def post(self, request):
         code = (request.data.get('voucher_code') or request.data.get('voucherCode') or '').strip().upper()
         subtotal = float(request.data.get('order_subtotal') or request.data.get('orderAmount') or 0)

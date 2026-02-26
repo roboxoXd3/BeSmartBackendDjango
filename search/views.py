@@ -2,24 +2,22 @@ import json
 from rest_framework import views, status
 from rest_framework.response import Response
 from django.db import connection
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
 
 
 class SearchAnalyticsView(views.APIView):
     """GET /api/search/analytics/ - Popular/recent searches. POST - Log a search event."""
     permission_classes = []
+    serializer_class = serializers.Serializer
 
     @extend_schema(
-        request={
-            'type': 'object',
-            'properties': {
-                'query': {'type': 'string'},
-                'result_count': {'type': 'integer'},
-                'filters': {'type': 'object'},
-            },
-            'required': ['query', 'result_count'],
-        },
-        responses={201: {'type': 'object', 'properties': {'success': {'type': 'boolean'}}}},
+        summary="Log a search event",
+        request=inline_serializer(
+            name="SearchAnalyticsReq", 
+            fields={"query": serializers.CharField(), "result_count": serializers.IntegerField(), "filters": serializers.DictField(required=False)}
+        ),
+        responses={201: inline_serializer(name="SearchAnalyticsRes", fields={"success": serializers.BooleanField()})},
     )
     def post(self, request):
         query = (request.data.get('query') or '').strip()
@@ -47,19 +45,20 @@ class SearchAnalyticsView(views.APIView):
         return Response({"success": True}, status=status.HTTP_201_CREATED)
 
     @extend_schema(
+        summary="Get popular and recent searches",
         parameters=[
             OpenApiParameter('start_date', str, description='Start date (YYYY-MM-DD)'),
             OpenApiParameter('end_date', str, description='End date (YYYY-MM-DD)'),
             OpenApiParameter('limit', int, description='Limit (default 10)'),
         ],
-        responses={200: {
-            'type': 'object',
-            'properties': {
-                'popular_searches': {'type': 'array', 'items': {'type': 'string'}},
-                'total_searches': {'type': 'integer'},
-                'recent_searches': {'type': 'array'},
-            },
-        }},
+        responses={200: inline_serializer(
+            name="SearchAnalyticsGetRes", 
+            fields={
+                "popular_searches": serializers.ListField(child=serializers.CharField()),
+                "total_searches": serializers.IntegerField(),
+                "recent_searches": serializers.ListField(child=serializers.DictField())
+            }
+        )},
     )
     def get(self, request):
         start_date = request.query_params.get('start_date')

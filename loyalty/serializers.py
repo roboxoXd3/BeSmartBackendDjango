@@ -39,6 +39,8 @@ class LoyaltyVoucherSerializer(serializers.ModelSerializer):
 
     order_id = serializers.SerializerMethodField()
 
+    from drf_spectacular.utils import extend_schema_field
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_order_id(self, obj):
         return str(obj.order_id) if obj.order_id else None
 

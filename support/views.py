@@ -15,7 +15,8 @@ from .serializers import (
     ContactBranchSerializer
 )
 from vendors.models import Vendor
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+from rest_framework import serializers
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ class ContactBranchListView(generics.ListAPIView):
 
 
 class UjunwaSendMessageView(views.APIView):
+    serializer_class = serializers.Serializer
     """
     POST /api/support/chat/send/
 
@@ -111,11 +113,11 @@ class UjunwaSendMessageView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        request={'type': 'object', 'properties': {
-            'message': {'type': 'string'},
-            'conversation_id': {'type': 'string', 'format': 'uuid'},
-        }, 'required': ['message']},
-        responses={200: {'type': 'object'}},
+        summary="Send message to AI Shopping Assistant",
+        request=inline_serializer("UjunwaSendMessageReq", {"message": serializers.CharField(), "conversation_id": serializers.UUIDField(required=False)}),
+        responses={200: inline_serializer("UjunwaSendMessageRes", {
+            "conversation_id": serializers.UUIDField(), "user_message": serializers.DictField(), "bot_response": serializers.DictField()
+        })},
     )
     def post(self, request):
         user_message_text = request.data.get('message', '').strip()
@@ -281,10 +283,19 @@ class UjunwaSendMessageView(views.APIView):
 
 
 class ChatAnalyticsTrackView(views.APIView):
+    serializer_class = serializers.Serializer
     """POST /api/support/chat/analytics/ — track chat action.
        GET  /api/support/chat/analytics/ — retrieve user's chat analytics."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Retrieve user's chat analytics",
+        parameters=[
+            OpenApiParameter('from_date', str, description='Start date (YYYY-MM-DD)'),
+            OpenApiParameter('to_date', str, description='End date (YYYY-MM-DD)'),
+        ],
+        responses={200: inline_serializer("ChatAnalyticsRes", {"count": serializers.IntegerField(), "results": serializers.ListField(child=serializers.DictField())})}
+    )
     def get(self, request):
         """Gap 3: getChatAnalytics — return user's analytics with optional date filters."""
         qs = ChatAnalytics.objects.filter(user=request.user).order_by('-created_at')
@@ -303,6 +314,11 @@ class ChatAnalyticsTrackView(views.APIView):
                 item['created_at'] = item['created_at'].isoformat()
         return Response({'count': len(data), 'results': data})
 
+    @extend_schema(
+        summary="Track a chat analytic action",
+        request=inline_serializer("ChatAnalyticsTrackReq", {"conversation_id": serializers.UUIDField(required=False), "action_type": serializers.CharField(), "action_data": serializers.DictField(required=False)}),
+        responses={200: inline_serializer("ChatAnalyticsTrackRes", {"success": serializers.BooleanField()})}
+    )
     def post(self, request):
         conversation_id = request.data.get('conversation_id')
         action_type = request.data.get('action_type', '')
@@ -325,10 +341,16 @@ class ChatAnalyticsTrackView(views.APIView):
 
 
 class ChatMarkMessagesReadView(views.APIView):
+    serializer_class = serializers.Serializer
     """POST /api/support/chat/{conversation_id}/messages/mark-read/
     Gap 1: markMessagesAsRead — bulk-update is_read for messages by sender_type."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Mark conversation messages as read",
+        request=inline_serializer("ChatMarkMessagesReadReq", {"sender_type": serializers.CharField(required=False)}),
+        responses={200: inline_serializer("ChatMarkMessagesReadRes", {"success": serializers.BooleanField(), "updated_count": serializers.IntegerField()})}
+    )
     def post(self, request, conversation_id):
         conversation = get_object_or_404(ChatConversation, id=conversation_id, user=request.user)
         sender_type = request.data.get('sender_type', 'bot')
@@ -341,10 +363,15 @@ class ChatMarkMessagesReadView(views.APIView):
 
 
 class ChatUnreadCountView(views.APIView):
+    serializer_class = serializers.Serializer
     """GET /api/support/chat/unread-count/
     Gap 2: getUnreadMessageCount — count of unread bot/agent messages across all conversations."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Get count of unread bot/agent messages",
+        responses={200: inline_serializer("ChatUnreadCountRes", {"unread_count": serializers.IntegerField()})}
+    )
     def get(self, request):
         count = ChatMessage.objects.filter(
             conversation__user=request.user,
@@ -354,10 +381,15 @@ class ChatUnreadCountView(views.APIView):
 
 
 class ChatClearHistoryView(views.APIView):
+    serializer_class = serializers.Serializer
     """POST /api/support/chat/clear-history/
     Gap 4: clearChatHistory — delete all chat data for the user."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Clear all chat history for the user",
+        responses={200: inline_serializer("ChatClearHistoryRes", {"success": serializers.BooleanField(), "message": serializers.CharField()})}
+    )
     def post(self, request):
         from django.db import transaction as db_transaction
         user = request.user
@@ -374,10 +406,19 @@ class ChatClearHistoryView(views.APIView):
 
 
 class ChatSearchMessagesView(views.APIView):
+    serializer_class = serializers.Serializer
     """GET /api/support/chat/messages/search/?q=...&limit=20
     Gap 5: searchMessages — full-text search across user's chat messages."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Search across user's chat messages",
+        parameters=[
+            OpenApiParameter('q', str, description='Query string'),
+            OpenApiParameter('limit', int, description='Limit (default 20)'),
+        ],
+        responses={200: inline_serializer("ChatSearchMessagesRes", {"count": serializers.IntegerField(), "results": serializers.ListField(child=serializers.DictField())})}
+    )
     def get(self, request):
         q = request.query_params.get('q', '').strip()
         limit = int(request.query_params.get('limit', 20))

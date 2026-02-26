@@ -70,8 +70,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            from .models import Payment
+            return Payment.objects.none()
         return self.request.user.payments.all() # Assuming related_name='payments'
-        # Or Payment.objects.filter(user=self.request.user)
 
 class InitiatePaymentView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]

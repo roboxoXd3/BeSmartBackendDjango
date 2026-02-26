@@ -6,7 +6,8 @@ from django.shortcuts import get_object_or_404
 from django.db import connection
 from .models import Product, ProductReview, ProductQuestion
 from .serializers import ProductListSerializer, ProductDetailSerializer
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
+from rest_framework import serializers
 
 class ProductListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -110,8 +111,12 @@ class ProductSizeChartView(views.APIView):
 class ProductViewTrackView(views.APIView):
     """POST /api/products/{id}/view/ — track product view"""
     permission_classes = []
+    serializer_class = serializers.Serializer
 
-    @extend_schema(responses={200: {'type': 'object', 'properties': {'success': {'type': 'boolean'}}}})
+    @extend_schema(
+        summary="Track product view",
+        responses={200: inline_serializer(name="ProductViewTrackRes", fields={"success": serializers.BooleanField()})}
+    )
     def post(self, request, id):
         product = get_object_or_404(Product, id=id, status='active', approval_status='approved')
         try:
@@ -140,6 +145,8 @@ class ProductReviewsListCreateView(generics.ListCreateAPIView):
         return []  # GET is public
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ProductReview.objects.none()
         return ProductReview.objects.filter(product_id=self.kwargs['id'], status='published').select_related('user').order_by('-created_at')
 
     def perform_create(self, serializer):
@@ -221,6 +228,14 @@ class CanReviewProductView(views.APIView):
     and whether they've already reviewed it."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Check if user can review a product",
+        responses={200: inline_serializer(name="CanReviewProductRes", fields={
+            "can_review": serializers.BooleanField(), 
+            "has_existing_review": serializers.BooleanField(), 
+            "order_id": serializers.UUIDField(allow_null=True)
+        })}
+    )
     def get(self, request, id):
         product = get_object_or_404(Product, id=id, status='active', approval_status='approved')
         user = request.user
@@ -259,6 +274,8 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
         return []
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ProductQuestion.objects.none()
         return ProductQuestion.objects.filter(product_id=self.kwargs['id'], status='published').order_by('-created_at')
 
     def perform_create(self, serializer):
@@ -319,6 +336,11 @@ class ProductQAAnswerView(views.APIView):
     Gap 10: submitAnswer — vendor answers a customer question."""
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Submit an answer to a product question",
+        request=inline_serializer(name="ProductQAAnswerReq", fields={"answer": serializers.CharField()}),
+        responses={200: inline_serializer(name="ProductQAAnswerRes", fields={"id": serializers.UUIDField(), "answer": serializers.CharField(), "status": serializers.CharField()})}
+    )
     def post(self, request, id, qa_id):
         qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
         answer_text = request.data.get('answer', '').strip()
@@ -349,8 +371,15 @@ class ProductQAAnswerView(views.APIView):
 class ProductQAHelpfulView(views.APIView):
     """POST /api/products/{id}/qa/{qa_id}/helpful/"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.Serializer
 
-    @extend_schema(responses={200: {'type': 'object'}})
+    @extend_schema(
+        summary="Mark a product question as helpful",
+        responses={200: inline_serializer(name="ProductQAHelpfulRes", fields={
+            "success": serializers.BooleanField(),
+            "is_helpful_count": serializers.IntegerField()
+        })}
+    )
     def post(self, request, id, qa_id):
         qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
         qa.is_helpful_count = (qa.is_helpful_count or 0) + 1
@@ -373,6 +402,8 @@ class ImageSearchView(views.APIView):
     }
     """
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.Serializer
+    serializer_class = serializers.Serializer
 
     @extend_schema(
         request={'type': 'object', 'properties': {
@@ -443,7 +474,16 @@ class ProductDeliveryInfoView(views.APIView):
     """GET /api/products/{id}/delivery-info/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product delivery info",
+        responses={200: inline_serializer(name="ProductDeliveryInfoRes", fields={
+            "id": serializers.UUIDField(), "product_id": serializers.UUIDField(),
+            "return_window_days": serializers.IntegerField(), "cod_eligible": serializers.BooleanField(),
+            "free_delivery": serializers.BooleanField(), "shipping_fee": serializers.DecimalField(max_digits=10, decimal_places=2),
+            "eta_min_days": serializers.IntegerField(), "eta_max_days": serializers.IntegerField(),
+            "delivery_notes": serializers.CharField(), "created_at": serializers.DateTimeField(), "updated_at": serializers.DateTimeField()
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -470,7 +510,17 @@ class ProductWarrantyInfoView(views.APIView):
     """GET /api/products/{id}/warranty-info/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product warranty info",
+        responses={200: inline_serializer(name="ProductWarrantyInfoRes", fields={
+            "id": serializers.UUIDField(), "product_id": serializers.UUIDField(),
+            "type": serializers.CharField(), "duration": serializers.CharField(),
+            "description": serializers.CharField(), "terms_url": serializers.URLField(allow_null=True),
+            "coverage_details": serializers.ListField(child=serializers.CharField(), allow_null=True),
+            "exclusions": serializers.ListField(child=serializers.CharField(), allow_null=True),
+            "created_at": serializers.DateTimeField(), "updated_at": serializers.DateTimeField()
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -496,7 +546,13 @@ class ProductOffersView(views.APIView):
     """GET /api/products/{id}/offers/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product offers",
+        responses={200: inline_serializer(name="ProductOffersRes", fields={
+            "count": serializers.IntegerField(), 
+            "results": serializers.ListField(child=serializers.DictField())
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -515,7 +571,13 @@ class ProductHighlightsView(views.APIView):
     """GET /api/products/{id}/highlights/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product highlights",
+        responses={200: inline_serializer(name="ProductHighlightsRes", fields={
+            "count": serializers.IntegerField(), 
+            "results": serializers.ListField(child=serializers.DictField())
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -532,7 +594,13 @@ class FeaturePostersView(views.APIView):
     """GET /api/products/{id}/feature-posters/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get feature posters",
+        responses={200: inline_serializer(name="FeaturePostersRes", fields={
+            "count": serializers.IntegerField(), 
+            "results": serializers.ListField(child=serializers.DictField())
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -551,7 +619,14 @@ class ProductSpecificationsView(views.APIView):
     """GET /api/products/{id}/specifications/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product specifications",
+        responses={200: inline_serializer(name="ProductSpecificationsRes", fields={
+            "count": serializers.IntegerField(), 
+            "groups": serializers.ListField(child=serializers.DictField()),
+            "raw": serializers.ListField(child=serializers.DictField())
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -584,7 +659,14 @@ class ProductRecommendationsView(views.APIView):
     """GET /api/products/{id}/recommendations/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product recommendations",
+        responses={200: inline_serializer(name="ProductRecommendationsRes", fields={
+            "similar_products": serializers.ListField(child=serializers.DictField()), 
+            "from_seller_products": serializers.ListField(child=serializers.DictField()), 
+            "you_might_also_like": serializers.ListField(child=serializers.DictField())
+        })}
+    )
     def get(self, request, id):
         product = get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:
@@ -655,7 +737,13 @@ class ProductReviewsSummaryView(views.APIView):
     """GET /api/products/{id}/reviews-summary/"""
     permission_classes = []
     authentication_classes = []
-
+    @extend_schema(
+        summary="Get product reviews summary",
+        responses={200: inline_serializer(name="ProductReviewsSummaryRes", fields={
+            "total_reviews": serializers.IntegerField(), "average_rating": serializers.FloatField(),
+            "with_media": serializers.IntegerField(), "histogram": serializers.ListField(child=serializers.IntegerField())
+        })}
+    )
     def get(self, request, id):
         get_object_or_404(Product, id=id, status='active', approval_status='approved')
         with connection.cursor() as c:

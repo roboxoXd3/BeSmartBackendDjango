@@ -5,6 +5,7 @@ from .models import (
     VendorSizeChartTemplate, VendorFollow
 )
 from users.serializers import UserSerializer
+from drf_spectacular.utils import extend_schema_field
 
 class VendorBankAccountSerializer(serializers.ModelSerializer):
     class Meta:
@@ -58,6 +59,7 @@ class VendorDetailSerializer(serializers.ModelSerializer):
             'follower_count',
         ]
 
+    @extend_schema_field(serializers.IntegerField())
     def get_follower_count(self, obj):
         return obj.followers.count()
 

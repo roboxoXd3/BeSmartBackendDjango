@@ -8,12 +8,24 @@ from .views import (
     VendorProductsView, VendorReviewsListCreateView,
     VendorReviewUpdateDeleteView, VendorFollowView,
     VendorFollowedListView, VendorFollowersView, VendorMyReviewView,
+    VendorKYCStatusView, VendorKYCUploadView,
+    VendorAnalyticsSalesView, VendorAnalyticsMetricsView,
+    VendorCustomerLocationsView, VendorOwnProductViewSet,
+    VendorOrderViewSet, VendorEscrowViewSet, VendorTransactionViewSet,
+    VendorPayoutSummaryView,
+    VendorProductReviewViewSet, VendorProductQAViewSet,
     VendorProductSizeChartAssignView,
 )
 
 router = DefaultRouter()
+router.register(r'own-products', VendorOwnProductViewSet, basename='vendor-own-product')
+router.register(r'orders', VendorOrderViewSet, basename='vendor-orders')
+router.register(r'escrow', VendorEscrowViewSet, basename='vendor-escrow')
+router.register(r'transactions', VendorTransactionViewSet, basename='vendor-transactions')
 router.register(r'bank-accounts', VendorBankAccountViewSet, basename='vendor-bank-account')
 router.register(r'size-charts', VendorSizeChartTemplateViewSet, basename='vendor-size-chart')
+router.register(r'reviews', VendorProductReviewViewSet, basename='vendor-reviews-mgmt')
+router.register(r'product-qa', VendorProductQAViewSet, basename='vendor-product-qa')
 
 urlpatterns = [
     # Static paths first (before <uuid:id>/ patterns)
@@ -23,7 +35,14 @@ urlpatterns = [
     path('following/', VendorFollowedListView.as_view(), name='vendor-following'),
     path('register/', VendorRegisterView.as_view(), name='vendor-register'),
     path('profile/', VendorProfileView.as_view(), name='vendor-profile'),
+    path('kyc-status/', VendorKYCStatusView.as_view(), name='vendor-kyc-status'),
+    path('kyc/upload/', VendorKYCUploadView.as_view(), name='vendor-kyc-upload'),
     path('dashboard/stats/', VendorDashboardStatsView.as_view(), name='vendor-dashboard-stats'),
+    path('dashboard/sales-trend/', VendorAnalyticsSalesView.as_view(), name='vendor-sales-trend'),
+    path('analytics/sales/', VendorAnalyticsSalesView.as_view(), name='vendor-analytics-sales'),
+    path('analytics/metrics/', VendorAnalyticsMetricsView.as_view(), name='vendor-analytics-metrics'),
+    path('stats/customer-locations/', VendorCustomerLocationsView.as_view(), name='vendor-customer-locations'),
+    path('payouts/summary/', VendorPayoutSummaryView.as_view(), name='vendor-payouts-summary'),
     path('payouts/', VendorPayoutListView.as_view(), name='vendor-payouts'),
     path('subscriptions/plans/', SubscriptionPlanListView.as_view(), name='subscription-plans'),
     path('subscriptions/current/', VendorSubscriptionView.as_view(), name='vendor-subscription-current'),

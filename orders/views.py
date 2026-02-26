@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions, status, views
+from rest_framework import generics, permissions, status, views, serializers
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db import models, transaction
@@ -9,7 +9,7 @@ from .serializers import (
     OrderSerializer, CreateOrderSerializer,
     WishlistSerializer, ShippingAddressSerializer
 )
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 
 # ──────────────────────────────────────────────
@@ -157,6 +157,7 @@ class CartItemUpdateView(generics.DestroyAPIView, generics.UpdateAPIView):
 class CartClearView(views.APIView):
     """POST /api/cart/clear/"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.Serializer
 
     @extend_schema(responses={200: {'type': 'object', 'properties': {'success': {'type': 'boolean'}, 'message': {'type': 'string'}}}})
     def post(self, request):
@@ -207,8 +208,13 @@ class WishlistDetailView(generics.DestroyAPIView):
 class WishlistMoveToCartView(views.APIView):
     """POST /api/wishlist/{id}/move-to-cart/ — {id} is wishlist item id"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.Serializer
 
-    @extend_schema(responses={200: {'type': 'object'}})
+    @extend_schema(
+        summary="Move wishlist item to cart", 
+        request=None,
+        responses={200: inline_serializer(name="WishlistMoveToCartRes", fields={"success": serializers.BooleanField(), "message": serializers.CharField()})}
+    )
     def post(self, request, pk):
         wishlist_item = get_object_or_404(Wishlist, pk=pk, user=request.user)
         product = wishlist_item.product
@@ -365,6 +371,7 @@ class OrderDetailView(generics.RetrieveAPIView):
 class OrderCancelView(views.APIView):
     """POST /api/orders/{id}/cancel/"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.Serializer
 
     @extend_schema(responses={200: {'type': 'object'}})
     def post(self, request, id):
@@ -386,12 +393,13 @@ class OrderPaymentStatusView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        request={'type': 'object', 'properties': {
-            'payment_status': {'type': 'string'},
-            'squad_gateway_ref': {'type': 'string'},
-            'escrow_status': {'type': 'string'},
-        }},
-        responses={200: {'type': 'object'}},
+        summary="Update payment status",
+        request=inline_serializer("OrderPaymentStatusReq", {
+            "payment_status": serializers.CharField(required=False),
+            "squad_gateway_ref": serializers.CharField(required=False),
+            "escrow_status": serializers.CharField(required=False),
+        }),
+        responses={200: inline_serializer("OrderPaymentStatusRes", {"success": serializers.BooleanField(), "order": OrderSerializer()})},
     )
     def patch(self, request, id):
         order = get_object_or_404(Order, id=id, user=request.user)
@@ -428,8 +436,9 @@ class OrderStatusUpdateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        request={'type': 'object', 'properties': {'status': {'type': 'string'}}},
-        responses={200: {'type': 'object'}},
+        summary="Update order status",
+        request=inline_serializer("OrderStatusUpdateReq", {"status": serializers.CharField()}),
+        responses={200: inline_serializer("OrderStatusUpdateRes", {"success": serializers.BooleanField(), "order": OrderSerializer(), "loyalty_points_awarded": serializers.IntegerField(required=False)})},
     )
     @transaction.atomic
     def patch(self, request, id):
@@ -549,7 +558,11 @@ class OrderReorderView(views.APIView):
     """POST /api/orders/{id}/reorder/ — create new order from same items"""
     permission_classes = [permissions.IsAuthenticated]
 
-    @extend_schema(responses={201: OrderSerializer})
+    @extend_schema(
+        summary="Reorder a previous order",
+        request=None,
+        responses={201: OrderSerializer}
+    )
     @transaction.atomic
     def post(self, request, id):
         src_order = get_object_or_404(Order, id=id, user=request.user)

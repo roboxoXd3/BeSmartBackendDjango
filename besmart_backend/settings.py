@@ -26,6 +26,7 @@ if RAILWAY_PUBLIC_DOMAIN:
 if '.up.railway.app' not in str(ALLOWED_HOSTS):
     ALLOWED_HOSTS.append('.railway.app')
 
+ALLOWED_HOSTS.append('testserver')
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',

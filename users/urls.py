@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    RegisterView, LoginView, UserProfileView, LogoutView,
+    RegisterView, LoginView, VendorLoginView, AdminLoginView, UserProfileView, LogoutView,
     PasswordResetView, PasswordChangeView,
     TokenRefreshView,
     AccountDeletionEligibilityView, AccountDeleteView,
@@ -9,6 +9,8 @@ from .views import (
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='auth_register'),
     path('login/', LoginView.as_view(), name='auth_login'),
+    path('vendor-login/', VendorLoginView.as_view(), name='auth_vendor_login'),
+    path('admin-login/', AdminLoginView.as_view(), name='auth_admin_login'),
     path('logout/', LogoutView.as_view(), name='auth_logout'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('password/reset/', PasswordResetView.as_view(), name='auth_password_reset'),
