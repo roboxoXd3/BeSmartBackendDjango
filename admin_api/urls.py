@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AdminUserViewSet,    AdminActionLogListView,
     SystemStatsView, AdminRecentActivityView, AdminRevenueChartView,
+    PlatformSettingsView, AppConfigSettingsView, AdminCurrencyRatesView, AdminUpdateCurrencyRatesView,
     UserAdminViewSet, VendorAdminViewSet, AppSettingsViewSet,
     ProductAdminViewSet, OrderAdminViewSet,
     PayoutAdminViewSet, TransactionAdminViewSet, LoyaltyAdminViewSet
@@ -24,5 +25,9 @@ urlpatterns = [
     path('dashboard/stats/', SystemStatsView.as_view(), name='admin-system-stats'),
     path('dashboard/recent-activity/', AdminRecentActivityView.as_view(), name='admin-recent-activity'),
     path('dashboard/revenue-chart/', AdminRevenueChartView.as_view(), name='admin-revenue-chart'),
+    path('settings/platform/', PlatformSettingsView.as_view(), name='admin-settings-platform'),
+    path('settings/app-settings/', AppConfigSettingsView.as_view(), name='admin-settings-app'),
+    path('settings/currency-rates/', AdminCurrencyRatesView.as_view(), name='admin-settings-currency-rates'),
+    path('settings/update-rates/', AdminUpdateCurrencyRatesView.as_view(), name='admin-settings-update-rates'),
     path('', include(router.urls)),
 ]

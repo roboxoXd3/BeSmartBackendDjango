@@ -48,6 +48,81 @@ class AppSettingsViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
+class PlatformSettingsView(views.APIView):
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(summary="Get Platform Settings", responses={200: inline_serializer(name="PlatformSettingsRes", fields={"settings": serializers.DictField()})})
+    def get(self, request):
+        setting, _ = AppSettings.objects.get_or_create(setting_key='platform', defaults={'setting_value': {}})
+        return Response(setting.setting_value)
+
+    @extend_schema(summary="Patch Platform Settings", request=inline_serializer(name="PlatformSettingsReq", fields={"settings": serializers.DictField()}))
+    def patch(self, request):
+        setting, _ = AppSettings.objects.get_or_create(setting_key='platform', defaults={'setting_value': {}})
+        new_data = request.data.get('settings', {})
+        if isinstance(setting.setting_value, dict):
+            setting.setting_value.update(new_data)
+        else:
+            setting.setting_value = new_data
+        setting.updated_by = request.user
+        setting.save()
+        return Response(setting.setting_value)
+
+
+class AppConfigSettingsView(views.APIView):
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(summary="Get App Configuration Settings", responses={200: inline_serializer(name="AppConfigSettingsRes", fields={"settings": serializers.DictField()})})
+    def get(self, request):
+        setting, _ = AppSettings.objects.get_or_create(setting_key='app-settings', defaults={'setting_value': {}})
+        return Response(setting.setting_value)
+
+    @extend_schema(summary="Patch App Configuration Settings", request=inline_serializer(name="AppConfigSettingsReq", fields={"settings": serializers.DictField()}))
+    def patch(self, request):
+        setting, _ = AppSettings.objects.get_or_create(setting_key='app-settings', defaults={'setting_value': {}})
+        new_data = request.data.get('settings', {})
+        if isinstance(setting.setting_value, dict):
+            setting.setting_value.update(new_data)
+        else:
+            setting.setting_value = new_data
+        setting.updated_by = request.user
+        setting.save()
+        return Response(setting.setting_value)
+
+
+class AdminCurrencyRatesView(views.APIView):
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(summary="Get all Currency Exchange Rates")
+    def get(self, request):
+        from currency.models import CurrencyRate
+        from currency.serializers import CurrencyRateSerializer
+        rates = CurrencyRate.objects.all()
+        serializer = CurrencyRateSerializer(rates, many=True)
+        return Response(serializer.data)
+
+
+class AdminUpdateCurrencyRatesView(views.APIView):
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(summary="Batch Update Exchange Rates", request=inline_serializer(name="UpdateCurrencyRatesReq", fields={"rates": serializers.ListField(child=serializers.DictField())}))
+    def post(self, request):
+        from currency.models import CurrencyRate
+        rates_data = request.data.get('rates', [])
+        updated_count = 0
+        for rate in rates_data:
+            from_cur = rate.get('from_currency')
+            to_cur = rate.get('to_currency')
+            rate_val = rate.get('rate')
+            if from_cur and to_cur and rate_val is not None:
+                CurrencyRate.objects.update_or_create(
+                    from_currency=from_cur, 
+                    to_currency=to_cur, 
+                    defaults={'rate': rate_val}
+                )
+                updated_count += 1
+        return Response({"message": f"{updated_count} rates updated successfully."}, status=status.HTTP_200_OK)
+
 class UserAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = User.objects.all().order_by('-date_joined')

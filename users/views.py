@@ -282,6 +282,44 @@ class PasswordResetView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class PasswordResetConfirmView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(
+        summary="Confirm Password Reset",
+        request=inline_serializer(name="PasswordResetConfirmReq", fields={"email": serializers.EmailField(), "token": serializers.CharField(), "new_password": serializers.CharField()}),
+        responses={200: inline_serializer(name="PasswordResetConfirmRes", fields={"message": serializers.CharField()})}
+    )
+    def post(self, request):
+        email = request.data.get('email')
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+        
+        if not all([email, token, new_password]):
+             return Response({"error": "email, token, and new_password are required."}, status=status.HTTP_400_BAD_REQUEST)
+             
+        try:
+            supabase = get_supabase_client()
+            # 1. Verify OTP to establish a session
+            auth_response = supabase.auth.verify_otp({"email": email, "token": token, "type": "recovery"})
+            
+            session = auth_response.session
+            if not session:
+                 return Response({"error": "Invalid or expired token."}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # 2. Update the password using the established session token
+            supabase.auth.update_user({"password": new_password}, jwt=session.access_token)
+            
+            # Optional: Log the user out immediately to force re-login with new password
+            try:
+                supabase.auth.sign_out(scope='global', jwt=session.access_token)
+            except:
+                pass
+                
+            return Response({"message": "Password has been reset successfully."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class PasswordChangeView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = PasswordChangeSerializer
@@ -338,6 +376,35 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         user_serializer = UserSerializer(self.request.user)
         return Response(user_serializer.data)
 
+from rest_framework.parsers import MultiPartParser, FormParser
+
+class UploadAvatarView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Upload User Avatar",
+        request={"multipart/form-data": inline_serializer(name="UploadAvatarReq", fields={"avatar": serializers.FileField()})},
+        responses={200: inline_serializer(name="UploadAvatarRes", fields={"message": serializers.CharField(), "avatar_url": serializers.CharField()})}
+    )
+    def post(self, request):
+        if 'avatar' not in request.FILES:
+             return Response({"error": "No avatar file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        avatar_file = request.FILES['avatar']
+        user = request.user
+        profile = getattr(user, 'profile', None)
+        if not profile:
+             return Response({"error": "User profile not found."}, status=status.HTTP_404_NOT_FOUND)
+             
+        profile.avatar = avatar_file
+        profile.save()
+        
+        return Response({
+            "message": "Avatar uploaded successfully.",
+            "avatar_url": request.build_absolute_uri(profile.avatar.url) if profile.avatar else None
+        }, status=status.HTTP_200_OK)
+
 
 class TokenRefreshView(APIView):
     """POST /api/users/token/refresh/ — refresh Supabase access token"""
@@ -375,6 +442,70 @@ class TokenRefreshView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
+class VerifyEmailView(APIView):
+    """POST /api/auth/verify-email/ — confirm email via OTP"""
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(
+        summary="Verify email with OTP",
+        request=inline_serializer(name="VerifyEmailReq", fields={"email": serializers.EmailField(), "token": serializers.CharField()}),
+        responses={200: inline_serializer(name="VerifyEmailRes", fields={"message": serializers.CharField(), "session": serializers.DictField(allow_null=True)})},
+    )
+    def post(self, request):
+        email = request.data.get('email')
+        token = request.data.get('token')
+        if not email or not token:
+            return Response(
+                {"error": "email and token (OTP) are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            supabase = get_supabase_client()
+            auth_response = supabase.auth.verify_otp({"email": email, "token": token, "type": "signup"})
+            session = auth_response.session
+            
+            # session can be an object, we need to convert it to dict for DRF Response if it's a pydantic model
+            session_data = None
+            if session:
+                session_data = session.model_dump() if hasattr(session, 'model_dump') else session
+
+            return Response({
+                "message": "Email verified successfully.",
+                "session": session_data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+class ResendVerificationEmailView(APIView):
+    """POST /api/auth/resend-verification/ — resend confirm email"""
+    permission_classes = (permissions.AllowAny,)
+
+    @extend_schema(
+        summary="Resend verification email",
+        request=inline_serializer(name="ResendVerificationReq", fields={"email": serializers.EmailField()}),
+        responses={200: inline_serializer(name="ResendVerificationRes", fields={"message": serializers.CharField()})},
+    )
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response(
+                {"error": "email is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            supabase = get_supabase_client()
+            supabase.auth.resend({"email": email, "type": "signup"})
+            return Response({
+                "message": "Verification email resent successfully."
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 class AccountDeletionEligibilityView(APIView):
     """GET /api/users/account/deletion-eligibility/"""
@@ -402,7 +533,7 @@ class AccountDeletionEligibilityView(APIView):
 
 
 class AccountDeleteView(APIView):
-    """POST /api/users/account/delete/ — requires password"""
+    """DELETE /api/users/account/ — requires password"""
     permission_classes = (permissions.IsAuthenticated,)
 
     @extend_schema(
@@ -410,7 +541,7 @@ class AccountDeleteView(APIView):
         request=inline_serializer(name="AccountDeleteReq", fields={"password": serializers.CharField()}), 
         responses={200: inline_serializer(name="AccountDeleteRes", fields={"success": serializers.BooleanField(), "message": serializers.CharField()})}
     )
-    def post(self, request):
+    def delete(self, request):
         from vendors.models import Vendor
         password = request.data.get('password', '')
         if not password:
@@ -436,3 +567,29 @@ class AccountDeleteView(APIView):
         except Exception as e:
             return Response({"success": False, "error": "deletion_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({"success": True, "message": "Your account has been successfully deleted."})
+
+class UserAddressesView(generics.ListAPIView):
+    """GET /api/users/addresses/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        from orders.serializers import ShippingAddressSerializer
+        return ShippingAddressSerializer
+
+    @extend_schema(summary="List User's Shipping Addresses")
+    def get_queryset(self):
+        from orders.models import ShippingAddress
+        return ShippingAddress.objects.filter(user=self.request.user)
+
+class UserPaymentMethodsView(generics.ListAPIView):
+    """GET /api/users/payment-methods/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        from payments.serializers import PaymentMethodSerializer
+        return PaymentMethodSerializer
+
+    @extend_schema(summary="List User's Saved Payment Methods")
+    def get_queryset(self):
+        from payments.models import PaymentMethod
+        return PaymentMethod.objects.filter(user=self.request.user)
