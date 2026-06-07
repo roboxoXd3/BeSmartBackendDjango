@@ -158,11 +158,13 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Storage Configuration (Supabase S3)
+# Storage Configuration (Cloudflare R2)
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-AWS_S3_ENDPOINT_URL = os.getenv('SUPABASE_S3_URL')
-AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'eu-central-1')
+AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')
+AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'auto')
+AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_BUCKET', 'my-assets')
 
 # Supabase Auth Configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -182,22 +184,23 @@ BUCKET_DOCUMENTS = os.getenv('BUCKET_DOCUMENTS', 'documents')
 
 if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     # Helper to create storage config
-    def get_storage_config(bucket_name):
+    def get_storage_config(location_name):
         return {
             "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
             "OPTIONS": {
                 "access_key": AWS_ACCESS_KEY_ID,
                 "secret_key": AWS_SECRET_ACCESS_KEY,
-                "bucket_name": bucket_name,
+                "bucket_name": AWS_STORAGE_BUCKET_NAME,
                 "endpoint_url": AWS_S3_ENDPOINT_URL,
                 "region_name": AWS_S3_REGION_NAME,
-                "default_acl": "public-read",
+                "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+                "location": location_name,
                 "querystring_auth": False,
             },
         }
 
     STORAGES = {
-        "default": get_storage_config(BUCKET_PRODUCTS), # Default to products
+        "default": get_storage_config(''), # Default to root of bucket
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
