@@ -133,7 +133,6 @@ class ProductViewTrackView(views.APIView):
 class ProductReviewsListCreateView(generics.ListCreateAPIView):
     """GET/POST /api/products/{id}/reviews/"""
     permission_classes = []
-    authentication_classes = []
 
     def get_serializer_class(self):
         from .serializers import ProductReviewSerializer, ProductReviewCreateSerializer
@@ -262,7 +261,6 @@ class CanReviewProductView(views.APIView):
 class ProductQAListCreateView(generics.ListCreateAPIView):
     """GET/POST /api/products/{id}/qa/"""
     permission_classes = []
-    authentication_classes = []
 
     def get_serializer_class(self):
         from .serializers import ProductQuestionSerializer, ProductQuestionCreateSerializer
