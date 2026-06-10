@@ -2,10 +2,17 @@ from rest_framework import generics, permissions, status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
-from .serializers import RegisterSerializer, UserSerializer, ProfileSerializer, LogoutSerializer, LoginSerializer, PasswordResetSerializer, PasswordChangeSerializer
+from .serializers import (
+    RegisterSerializer, UserSerializer, ProfileSerializer, LogoutSerializer,
+    LoginSerializer, PasswordResetSerializer, PasswordChangeSerializer,
+    ProfilePhotoUploadSerializer
+)
 from drf_spectacular.utils import extend_schema, inline_serializer
 from django.conf import settings
+from django.core.files.storage import storages
 from supabase import create_client, Client
+import os
+import uuid
 
 User = get_user_model()
 
@@ -436,3 +443,102 @@ class AccountDeleteView(APIView):
         except Exception as e:
             return Response({"success": False, "error": "deletion_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({"success": True, "message": "Your account has been successfully deleted."})
+
+
+class ProfilePhotoUploadView(APIView):
+    permission_classes = (permissions.IsAuthenticated,)
+    serializer_class = ProfilePhotoUploadSerializer
+
+    @extend_schema(
+        summary="Upload User Profile Photo",
+        description="Uploads an image file to Cloudflare R2 avatars storage, updates the user's profile image path, and returns the updated profile info.",
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'file': {
+                        'type': 'string',
+                        'format': 'binary',
+                        'description': 'The profile photo image file'
+                    }
+                },
+                'required': ['file']
+            }
+        },
+        responses={
+            200: inline_serializer(
+                name="ProfilePhotoUploadResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "image_url": serializers.CharField(),
+                    "profile": ProfileSerializer(),
+                }
+            ),
+            400: inline_serializer(
+                name="ProfilePhotoUploadError",
+                fields={
+                    "error": serializers.CharField(),
+                }
+            )
+        }
+    )
+    def post(self, request):
+        serializer = ProfilePhotoUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        uploaded_file = serializer.validated_data['file']
+        
+        # Determine the file extension and validate
+        _, ext = os.path.splitext(uploaded_file.name)
+        ext = ext.lower()
+        if ext not in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
+            return Response({"error": "Unsupported image format. Allowed formats: JPG, JPEG, PNG, WEBP, GIF."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get avatars storage
+            avatar_storage = storages['avatars']
+            
+            # Generate a unique path/filename under the user's namespace to avoid CDN caching issues
+            unique_id = uuid.uuid4().hex[:8]
+            file_name = f"{request.user.id}/avatar_{unique_id}{ext}"
+            
+            # Get or create profile defensively
+            from .models import Profile
+            profile, created = Profile.objects.get_or_create(id=request.user)
+            
+            # If the profile already has an image, attempt to delete the old one
+            if profile.image_path:
+                try:
+                    import re
+                    # Look for the path after "/avatars/" to match R2 location folder structure
+                    match = re.search(r'/avatars/(.+)$', profile.image_path)
+                    if match:
+                        old_relative_path = match.group(1)
+                        if avatar_storage.exists(old_relative_path):
+                            avatar_storage.delete(old_relative_path)
+                except Exception as ex:
+                    # Non-blocking: just log or ignore deletion errors so the upload succeeds
+                    print(f"DEBUG: Failed to delete old avatar {profile.image_path}: {ex}")
+            
+            # Save the file to storage (Cloudflare R2)
+            saved_name = avatar_storage.save(file_name, uploaded_file)
+            
+            # Generate public URL
+            file_url = avatar_storage.url(saved_name)
+            
+            # Update user's profile image path
+            profile.image_path = file_url
+            profile.save(update_fields=['image_path', 'updated_at'])
+            
+            # Return response
+            profile_serializer = ProfileSerializer(profile)
+            return Response({
+                "message": "Profile photo uploaded successfully.",
+                "image_url": file_url,
+                "profile": profile_serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": f"Failed to upload profile photo: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

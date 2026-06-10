@@ -58,3 +58,7 @@ class PasswordResetSerializer(serializers.Serializer):
 
 class PasswordChangeSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
+
+class ProfilePhotoUploadSerializer(serializers.Serializer):
+    file = serializers.ImageField(help_text="The profile photo image file to upload.")
+
