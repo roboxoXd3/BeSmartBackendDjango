@@ -1,6 +1,7 @@
 import uuid as uuid_module
 from rest_framework import generics, filters, status, views, permissions
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.db import connection
@@ -791,6 +792,7 @@ def _dictfetchall(cursor) -> list:
 class ProductVideoUploadView(views.APIView):
     """POST /api/products/{id}/upload-video/"""
     permission_classes = [IsAdminOrProductVendor]
+    parser_classes = [MultiPartParser, FormParser]
 
     @extend_schema(
         summary="Upload product video asynchronously",
@@ -832,6 +834,7 @@ class ProductVideoUploadView(views.APIView):
 class ProductColorImageUploadView(views.APIView):
     """POST /api/products/{id}/upload-color-image/"""
     permission_classes = [IsAdminOrProductVendor]
+    parser_classes = [MultiPartParser, FormParser]
 
     @extend_schema(
         summary="Upload image for a specific product color variant",
@@ -862,14 +865,20 @@ class ProductColorImageUploadView(views.APIView):
             except Exception as e:
                 return Response({'error': 'Failed to upload image to storage', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            if color_name not in colors:
+            if not isinstance(color_name, str):
+                color_name = str(color_name)
+                
+            if color_name not in colors or not isinstance(colors[color_name], dict):
                 colors[color_name] = {}
             colors[color_name]['image_url'] = public_url
             
             product.colors = colors
             product.save(update_fields=['colors'])
             
-        return Response(colors)
+        # Return a fresh dictionary to avoid any accidental DRF serialization issues
+        # and definitely avoid returning any QueryDict or File objects that might have sneaked in
+        clean_colors = {k: v for k, v in colors.items()}
+        return Response({'status': 'success', 'image_url': public_url, 'colors': clean_colors})
 
 class MediaUploadJobStatusView(views.APIView):
     """GET /api/products/upload-jobs/{job_id}/"""
