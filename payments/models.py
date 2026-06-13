@@ -33,44 +33,33 @@ class Payment(models.Model):
         ('refunded', 'Refunded'),
     ]
     
-    PAYMENT_METHOD_CHOICES = [
-        ('card', 'Card'),
-        ('bank_transfer', 'Bank Transfer'),
-        ('ussd', 'USSD'),
-        ('wallet', 'Wallet'),
-    ]
-    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
-    user_email = models.TextField()
+    order_id = models.UUIDField(null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING, related_name='payments', null=True, blank=True)
     
     # Amount details
-    amount = models.IntegerField()
-    currency = models.TextField(default='NGN')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=10, default='NGN')
     
     # Transaction details
-    transaction_ref = models.TextField(unique=True, db_index=True)
+    transaction_ref = models.CharField(max_length=100, null=True, blank=True)
+    provider = models.CharField(max_length=50, default='squad', null=True, blank=True)
     
     # Status tracking
-    status = models.TextField(default='pending')
-    payment_type = models.TextField()
+    status = models.CharField(max_length=20, default='pending', choices=PAYMENT_STATUS_CHOICES)
     
     # Gateway specific fields
-    token = models.TextField(blank=True, null=True)
-    gateway_response = models.TextField(blank=True, null=True)
+    payment_method_id = models.UUIDField(null=True, blank=True)
+    provider_response = models.JSONField(null=True, blank=True)
+    checkout_url = models.TextField(null=True, blank=True)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     
     class Meta:
         db_table = 'payments'
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['transaction_ref']),
-            models.Index(fields=['status', 'created_at']),
-            models.Index(fields=['user', 'status']),
-        ]
     
     def __str__(self):
         return f"Payment {self.transaction_ref} - {self.status}"

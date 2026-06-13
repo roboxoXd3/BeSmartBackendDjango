@@ -14,7 +14,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = [
             'id', 'transaction_ref', 'amount', 'currency',
-            'status', 'payment_method', 'checkout_url',
+            'status', 'payment_method_id', 'checkout_url',
             'created_at', 'completed_at'
         ]
         read_only_fields = ['id', 'transaction_ref', 'checkout_url', 'created_at']
