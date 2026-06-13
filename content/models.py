@@ -41,39 +41,47 @@ class ContactInfo(models.Model):
 
 
 class PromotionalBanner(models.Model):
-    BANNER_SIZE_CHOICES = (
-        ('small', 'Small'),
-        ('medium', 'Medium'),
-        ('large', 'Large'),
-    )
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=255)
+    title = models.TextField(null=True, blank=True)
     description = models.TextField(null=True, blank=True)
-    image_url = models.TextField()
-    link_url = models.TextField(null=True, blank=True)
-    background_color = models.CharField(max_length=50, default='#FFFFFF')
-    text_color = models.CharField(max_length=50, default='#000000')
-    position = models.CharField(max_length=50, default='top')
-    page_location = models.CharField(max_length=50, default='home')
-    padding = models.CharField(max_length=50, default='20px')
-    border_radius = models.CharField(max_length=50, default='8px')
-    is_active = models.BooleanField(default=True)
+    subtitle = models.TextField(null=True, blank=True)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    discount_type = models.TextField(null=True, blank=True)
+    coupon_code = models.TextField(null=True, blank=True)
+    background_image_url = models.TextField(null=True, blank=True)
+    show_title = models.BooleanField(null=True, blank=True)
+    show_description = models.BooleanField(null=True, blank=True)
+    show_subtitle = models.BooleanField(null=True, blank=True)
+    show_discount = models.BooleanField(null=True, blank=True)
+    show_coupon_code = models.BooleanField(null=True, blank=True)
+    show_background_image = models.BooleanField(null=True, blank=True)
+    title_color = models.TextField(null=True, blank=True)
+    description_color = models.TextField(null=True, blank=True)
+    subtitle_color = models.TextField(null=True, blank=True)
+    discount_color = models.TextField(null=True, blank=True)
+    coupon_code_color = models.TextField(null=True, blank=True)
+    background_color = models.TextField(null=True, blank=True)
+    overlay_color = models.TextField(null=True, blank=True)
+    text_alignment = models.TextField(null=True, blank=True)
+    banner_height = models.TextField(null=True, blank=True)
+    padding = models.TextField(null=True, blank=True)
+    border_radius = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(null=True, blank=True)
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
-    priority = models.IntegerField(default=0)
-    is_template = models.BooleanField(default=False)
-    template_name = models.CharField(max_length=255, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(AdminUser, on_delete=models.SET_NULL, null=True, blank=True)
-    custom_styles = models.JSONField(default=dict)
-    button_text = models.CharField(max_length=255, null=True, blank=True)
+    priority = models.IntegerField(null=True, blank=True)
+    is_template = models.BooleanField(null=True, blank=True)
+    template_name = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.UUIDField(null=True, blank=True)
+    custom_styles = models.JSONField(null=True, blank=True)
+    button_text = models.TextField(null=True, blank=True)
     button_url = models.TextField(null=True, blank=True)
-    button_color = models.CharField(max_length=50, default='#007BFF')
-    button_text_color = models.CharField(max_length=50, default='#FFFFFF')
-    show_button = models.BooleanField(default=False)
-    banner_size = models.CharField(max_length=20, choices=BANNER_SIZE_CHOICES, default='medium')
+    button_color = models.TextField(null=True, blank=True)
+    button_text_color = models.TextField(null=True, blank=True)
+    show_button = models.BooleanField(null=True, blank=True)
+    banner_size = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = 'promotional_banners'
@@ -92,3 +100,18 @@ class SupportInfo(models.Model):
 
     class Meta:
         db_table = 'support_info'
+
+class PlatformSettings(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.TextField()
+    key = models.TextField()
+    value = models.JSONField()
+    description = models.TextField(null=True, blank=True)
+    is_public = models.BooleanField(null=True, blank=True)
+    updated_by = models.UUIDField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'platform_settings'
+

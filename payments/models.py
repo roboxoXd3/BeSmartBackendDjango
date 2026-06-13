@@ -41,31 +41,27 @@ class Payment(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='payments')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
-    
-    # Transaction details
-    transaction_ref = models.CharField(max_length=255, unique=True, db_index=True)
-    gateway_transaction_ref = models.CharField(max_length=255, blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments', null=True, blank=True)
+    user_email = models.TextField()
     
     # Amount details
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=3, default='NGN')
+    amount = models.IntegerField()
+    currency = models.TextField(default='NGN')
+    
+    # Transaction details
+    transaction_ref = models.TextField(unique=True, db_index=True)
     
     # Status tracking
-    status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
-    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
+    status = models.TextField(default='pending')
+    payment_type = models.TextField()
     
-    # Squad specific fields
-    checkout_url = models.URLField(blank=True, null=True)
-    
-    # Metadata
-    metadata = models.JSONField(blank=True, null=True)
+    # Gateway specific fields
+    token = models.TextField(blank=True, null=True)
+    gateway_response = models.TextField(blank=True, null=True)
     
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    completed_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     
     class Meta:
         db_table = 'payments'
@@ -79,14 +75,13 @@ class Payment(models.Model):
     def __str__(self):
         return f"Payment {self.transaction_ref} - {self.status}"
     
-    def mark_as_success(self, gateway_ref=None, payment_method=None):
+    def mark_as_success(self, gateway_res=None, payment_type=None):
         """Mark payment as successful"""
         self.status = 'success'
-        self.completed_at = timezone.now()
-        if gateway_ref:
-            self.gateway_transaction_ref = gateway_ref
-        if payment_method:
-            self.payment_method = payment_method
+        if gateway_res:
+            self.gateway_response = gateway_res
+        if payment_type:
+            self.payment_type = payment_type
         self.save()
     
     def mark_as_failed(self):
@@ -98,22 +93,20 @@ class PaymentWebhook(models.Model):
     """Store all webhook events from Squad"""
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name='webhooks')
     
     # Webhook details
-    event_type = models.CharField(max_length=100)
     transaction_ref = models.CharField(max_length=255, db_index=True)
+    order_id = models.UUIDField(null=True, blank=True)
     
     # Raw data
-    payload = models.JSONField()
-    signature = models.CharField(max_length=255)
+    webhook_data = models.JSONField()
     
     # Processing status
-    is_processed = models.BooleanField(default=False)
+    status = models.CharField(max_length=255)
     processed_at = models.DateTimeField(blank=True, null=True)
     
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     
     class Meta:
         db_table = 'payment_webhooks'
@@ -166,3 +159,14 @@ class Refund(models.Model):
     
     def __str__(self):
         return f"Refund {self.id} - {self.amount} - {self.status}"
+
+class OtherPaymentMethods(models.Model):
+    id = models.IntegerField(primary_key=True)
+    user_id = models.UUIDField()
+    payment_method = models.TextField()
+    details = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'other_payment_methods'
+

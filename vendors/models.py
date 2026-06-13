@@ -59,6 +59,11 @@ class Vendor(models.Model):
     last_login_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     admin_notes = models.TextField(null=True, blank=True)
+    total_earnings = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    available_balance = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    pending_payouts = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_paid_out = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    rejection_reason = models.TextField(null=True, blank=True)
     
     class Meta:
         db_table = 'vendors'
@@ -70,8 +75,11 @@ class VendorBankAccount(models.Model):
     account_name = models.CharField(max_length=255)
     bank_code = models.CharField(max_length=50)
     bank_name = models.CharField(max_length=100)
-    currency = models.CharField(max_length=10, default='NGN')
-    is_primary = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
+    is_default = models.BooleanField(default=False)
+    status = models.CharField(max_length=50, default='pending')
+    admin_notes = models.TextField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -124,9 +132,10 @@ class SubscriptionPlan(models.Model):
     name = models.TextField()
     description = models.TextField(null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=10, default='NGN')
-    billing_period = models.CharField(max_length=20, default='monthly') 
+    billing_cycle = models.TextField(default='monthly')
     features = models.JSONField(null=True, blank=True)
+    limits = models.JSONField(null=True, blank=True)
+    sort_order = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -171,7 +180,7 @@ class VendorSizeChartTemplate(models.Model):
     chart_type = models.CharField(max_length=50, default='custom')
     template_data = models.JSONField()
     approval_status = models.CharField(max_length=20, default='pending')
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column='approved_by')
     approved_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -226,3 +235,35 @@ class EscrowTransaction(models.Model):
     class Meta:
         db_table = 'escrow_transactions'
         ordering = ['-created_at']
+
+class VendorApplications(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor_id = models.UUIDField(null=True, blank=True)
+    application_type = models.TextField()
+    status = models.TextField()
+    submitted_data = models.JSONField()
+    admin_notes = models.TextField(null=True, blank=True)
+    reviewed_by = models.UUIDField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'vendor_applications'
+
+class VendorSessions(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor_id = models.UUIDField()
+    user_id = models.UUIDField()
+    session_token = models.TextField(unique=True)
+    refresh_token = models.TextField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(null=True, blank=True)
+    device_info = models.JSONField(null=True, blank=True)
+    ip_address = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'vendor_sessions'
+

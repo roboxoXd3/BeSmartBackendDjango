@@ -65,6 +65,7 @@ class Order(models.Model):
     # Tracking
     shipping_method = models.CharField(max_length=100, null=True, blank=True)
     tracking_number = models.CharField(max_length=100, null=True, blank=True)
+    tracking_url = models.TextField(null=True, blank=True)
     estimated_delivery = models.DateTimeField(null=True, blank=True)
     
     # Financials
@@ -79,6 +80,8 @@ class Order(models.Model):
     squad_gateway_ref = models.CharField(max_length=255, null=True, blank=True)
     payment_status = models.CharField(max_length=50, default='pending')
     loyalty_points_earned = models.IntegerField(default=0)
+    loyalty_voucher_code = models.TextField(null=True, blank=True)
+    loyalty_discount_applied = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     # Vendor & Escrow
     escrow_status = models.CharField(max_length=50, default='none')
@@ -132,3 +135,16 @@ class OrderItem(models.Model):
 
     class Meta:
         db_table = 'order_items'
+
+class OrderStatusHistory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order_id = models.UUIDField()
+    previous_status = models.TextField(null=True, blank=True)
+    new_status = models.TextField()
+    changed_by = models.UUIDField(null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'order_status_history'
+

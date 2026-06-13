@@ -615,11 +615,40 @@ class VendorSizeChartTemplateViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return VendorSizeChartTemplate.objects.none()
+        if self.request.user.is_staff:
+            return VendorSizeChartTemplate.objects.all()
         return VendorSizeChartTemplate.objects.filter(vendor__user=self.request.user)
 
     def perform_create(self, serializer):
         vendor = get_object_or_404(Vendor, user=self.request.user)
         serializer.save(vendor=vendor)
+
+    @extend_schema(
+        summary="Upload size chart image",
+        request=inline_serializer("VendorSizeChartImageUpload", {"image": serializers.ImageField()}),
+        responses={200: inline_serializer("VendorSizeChartImageUploadResp", {"status": serializers.CharField(), "image_url": serializers.CharField()})}
+    )
+    @action(detail=True, methods=['post'], url_path='upload-image')
+    def upload_image(self, request, pk=None):
+        template = self.get_object()
+        image = request.FILES.get('image')
+        if not image:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        from products.r2_utils import upload_file_to_r2
+        import uuid
+        ext = image.name.split('.')[-1] if '.' in image.name else 'png'
+        key = f"size-charts/{template.id}/{uuid.uuid4()}.{ext}"
+        
+        try:
+            public_url = upload_file_to_r2(image, key, image.content_type)
+        except Exception as e:
+            return Response({'error': 'Failed to upload image to storage', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        template.image_url = public_url
+        template.save(update_fields=['image_url'])
+        
+        return Response({'image_url': public_url})
 
 class VendorOwnProductViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]

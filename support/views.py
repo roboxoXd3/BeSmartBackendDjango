@@ -79,7 +79,7 @@ class ChatMessageView(generics.ListCreateAPIView):
 
 class ContactBranchListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
-    queryset = ContactBranch.objects.filter(is_active=True)
+    queryset = ContactBranch.objects.all()
     serializer_class = ContactBranchSerializer
 
 

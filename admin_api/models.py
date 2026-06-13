@@ -21,6 +21,7 @@ class AdminUser(models.Model):
     is_active = models.BooleanField(default=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
     profile_image_url = models.TextField(null=True, blank=True)
+    password_hash = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -73,7 +74,7 @@ class AppSettings(models.Model):
     setting_key = models.CharField(max_length=255, unique=True)
     setting_value = models.JSONField()
     description = models.TextField(null=True, blank=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,0 +1,188 @@
+{
+	"info": {
+		"_postman_id": "e0b1c2d3-f4g5-h6i7-j8k9-l0m1n2o3p4q5",
+		"name": "BeSmart Media Uploads",
+		"description": "Collection for the newly added BeSmart media upload APIs for products and vendor size charts.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Product Video Upload (Async)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "video",
+							"type": "file",
+							"src": []
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/products/:id/upload-video/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"products",
+						":id",
+						"upload-video",
+						""
+					],
+					"variable": [
+						{
+							"key": "id",
+							"value": "product-uuid-here"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Media Upload Job Status",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/products/upload-jobs/:job_id/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"products",
+						"upload-jobs",
+						":job_id",
+						""
+					],
+					"variable": [
+						{
+							"key": "job_id",
+							"value": "job-uuid-here"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Product Color Image Upload",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "color_name",
+							"value": "Red",
+							"type": "text"
+						},
+						{
+							"key": "image",
+							"type": "file",
+							"src": []
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/products/:id/upload-color-image/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"products",
+						":id",
+						"upload-color-image",
+						""
+					],
+					"variable": [
+						{
+							"key": "id",
+							"value": "product-uuid-here"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Vendor Size Chart Image Upload",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{auth_token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": []
+						}
+					]
+				},
+				"url": {
+					"raw": "{{base_url}}/api/vendors/size-charts/:template_id/upload-image/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"vendors",
+						"size-charts",
+						":template_id",
+						"upload-image",
+						""
+					],
+					"variable": [
+						{
+							"key": "template_id",
+							"value": "template-uuid-here"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000"
+		},
+		{
+			"key": "auth_token",
+			"value": "your-jwt-token-here"
+		}
+	]
+}

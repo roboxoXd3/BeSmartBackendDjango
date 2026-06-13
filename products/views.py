@@ -4,8 +4,9 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.db import connection
-from .models import Product, ProductReview, ProductQuestion
+from .models import Product, ProductReview, ProductQuestion, MediaUploadJob
 from .serializers import ProductListSerializer, ProductDetailSerializer
+from .permissions import IsAdminOrProductVendor
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
 
@@ -786,3 +787,103 @@ def _dictfetchall(cursor) -> list:
             d[col_name] = val
         rows.append(d)
     return rows
+
+class ProductVideoUploadView(views.APIView):
+    """POST /api/products/{id}/upload-video/"""
+    permission_classes = [IsAdminOrProductVendor]
+
+    @extend_schema(
+        summary="Upload product video asynchronously",
+        request=inline_serializer("ProductVideoUploadReq", {"video": serializers.FileField()}),
+        responses={202: inline_serializer("ProductVideoUploadResp", {"job_id": serializers.UUIDField(), "status": serializers.CharField()})}
+    )
+    def post(self, request, id):
+        product = get_object_or_404(Product, id=id)
+        self.check_object_permissions(request, product)
+
+        video_file = request.FILES.get('video')
+        if not video_file:
+            return Response({'error': 'No video file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        import tempfile
+        import os
+        ext = video_file.name.split('.')[-1] if '.' in video_file.name else 'mp4'
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, f"video_{uuid_module.uuid4()}.{ext}")
+        
+        with open(temp_path, 'wb+') as dest:
+            for chunk in video_file.chunks():
+                dest.write(chunk)
+
+        job = MediaUploadJob.objects.create(status='pending')
+        
+        from .r2_utils import start_async_upload
+        key = f"product-videos/{product.id}/{job.id}.{ext}"
+        try:
+            start_async_upload(job.id, temp_path, key, video_file.content_type, product.id)
+        except Exception as e:
+            job.status = 'failed'
+            job.error_message = str(e)
+            job.save()
+            return Response({'error': 'Failed to initiate video upload', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({'job_id': job.id, 'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
+
+class ProductColorImageUploadView(views.APIView):
+    """POST /api/products/{id}/upload-color-image/"""
+    permission_classes = [IsAdminOrProductVendor]
+
+    @extend_schema(
+        summary="Upload image for a specific product color variant",
+        request=inline_serializer("ProductColorImageUploadReq", {"image": serializers.ImageField(), "color_name": serializers.CharField()}),
+        responses={200: inline_serializer("ProductColorImageUploadResp", {"status": serializers.CharField(), "colors": serializers.DictField()})}
+    )
+    def post(self, request, id):
+        from django.db import transaction
+        
+        color_name = request.data.get('color_name')
+        image_file = request.FILES.get('image')
+        
+        if not color_name or not image_file:
+            return Response({'error': 'color_name and image are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            product = get_object_or_404(Product.objects.select_for_update(), id=id)
+            self.check_object_permissions(request, product)
+
+            colors = product.colors or {}
+            
+            from .r2_utils import upload_file_to_r2
+            ext = image_file.name.split('.')[-1] if '.' in image_file.name else 'png'
+            key = f"product-colors/{product.id}/{uuid_module.uuid4()}.{ext}"
+            
+            try:
+                public_url = upload_file_to_r2(image_file, key, image_file.content_type)
+            except Exception as e:
+                return Response({'error': 'Failed to upload image to storage', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            if color_name not in colors:
+                colors[color_name] = {}
+            colors[color_name]['image_url'] = public_url
+            
+            product.colors = colors
+            product.save(update_fields=['colors'])
+            
+        return Response(colors)
+
+class MediaUploadJobStatusView(views.APIView):
+    """GET /api/products/upload-jobs/{job_id}/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Check status of a media upload job",
+        responses={200: inline_serializer("MediaUploadJobStatusResp", {"id": serializers.UUIDField(), "status": serializers.CharField(), "result_url": serializers.CharField(allow_null=True), "error_message": serializers.CharField(allow_null=True)})}
+    )
+    def get(self, request, job_id):
+        job = get_object_or_404(MediaUploadJob, id=job_id)
+        return Response({
+            'id': job.id,
+            'status': job.status,
+            'result_url': job.result_url,
+            'error_message': job.error_message
+        })

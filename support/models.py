@@ -21,13 +21,15 @@ class SupportTicket(models.Model):
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='tickets')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='support_tickets', null=True, blank=True)
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, related_name='tickets', null=True, blank=True)
+    order_id = models.UUIDField(null=True, blank=True)
     subject = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
     category = models.CharField(max_length=50, default='general')
-    assigned_to = models.ForeignKey(AdminUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets')
-    resolved_by = models.ForeignKey(AdminUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_tickets')
+    assigned_to = models.ForeignKey(AdminUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets', db_column='assigned_to')
+    resolved_by = models.ForeignKey(AdminUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_tickets', db_column='resolved_by')
     resolved_at = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -40,9 +42,8 @@ class SupportMessage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE) # Vendor user or Admin user
-    message = models.TextField()
-    is_internal = models.BooleanField(default=False)
-    attachments = models.JSONField(null=True, blank=True)
+    sender_role = models.TextField()
+    message_content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -122,15 +123,21 @@ class ContactBranch(models.Model):
     city = models.CharField(max_length=100)
     state = models.CharField(max_length=100)
     country = models.CharField(max_length=100, default='Nigeria')
-    postal_code = models.CharField(max_length=20, null=True, blank=True)
     phone = models.CharField(max_length=50)
-    email = models.EmailField(null=True, blank=True)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
-    opening_hours = models.JSONField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'contact_branches'
+
+class FAQ(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    question = models.TextField()
+    answer = models.TextField()
+    category = models.TextField()
+    order_index = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'faqs'
+

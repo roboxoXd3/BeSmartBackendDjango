@@ -10,6 +10,7 @@ from .views import (
     ProductOffersView, ProductHighlightsView,
     FeaturePostersView, ProductSpecificationsView,
     ProductRecommendationsView, ProductReviewsSummaryView,
+    ProductVideoUploadView, ProductColorImageUploadView, MediaUploadJobStatusView,
 )
 
 urlpatterns = [
@@ -22,6 +23,9 @@ urlpatterns = [
     path('search-by-image/', ImageSearchView.as_view(), name='product-image-search'),
 
     # Parameterized paths (uuid)
+    path('upload-jobs/<uuid:job_id>/', MediaUploadJobStatusView.as_view(), name='product-media-job-status'),
+    path('<uuid:id>/upload-video/', ProductVideoUploadView.as_view(), name='product-video-upload'),
+    path('<uuid:id>/upload-color-image/', ProductColorImageUploadView.as_view(), name='product-color-image-upload'),
     path('<uuid:id>/delivery-info/', ProductDeliveryInfoView.as_view(), name='product-delivery-info'),
     path('<uuid:id>/warranty-info/', ProductWarrantyInfoView.as_view(), name='product-warranty-info'),
     path('<uuid:id>/offers/', ProductOffersView.as_view(), name='product-offers'),

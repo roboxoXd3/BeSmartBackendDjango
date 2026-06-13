@@ -36,3 +36,26 @@ class Profile(models.Model):
         db_table = 'profiles'  # Map to existing table if we want, but 'public.profiles' might conflict if we let Django manage it.
         # If we want to strictly map to existing 'public.profiles', we can use managed = False
         # But we are migrating away, so managed = True is fine, assuming we handle the data migration.
+
+class Notification(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user_id = models.UUIDField()
+    type = models.TextField()
+    title = models.TextField()
+    message = models.TextField()
+    read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notifications'
+
+class ReviewHelpfulness(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    review_id = models.UUIDField()
+    user_id = models.UUIDField()
+    is_helpful = models.BooleanField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'review_helpfulness'
+
