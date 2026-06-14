@@ -873,7 +873,22 @@ class ProductColorImageUploadView(views.APIView):
             colors[color_name]['image_url'] = public_url
             
             product.colors = colors
-            product.save(update_fields=['colors'])
+            update_fields = ['colors']
+
+            if color_name.lower() == 'default':
+                import json
+                try:
+                    existing_images = json.loads(product.images) if product.images else []
+                    if not isinstance(existing_images, list):
+                        existing_images = []
+                except Exception:
+                    existing_images = []
+                
+                existing_images.insert(0, public_url)
+                product.images = json.dumps(existing_images)
+                update_fields.append('images')
+
+            product.save(update_fields=update_fields)
             
         # Return a fresh dictionary to avoid any accidental DRF serialization issues
         # and definitely avoid returning any QueryDict or File objects that might have sneaked in
