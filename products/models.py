@@ -38,7 +38,7 @@ class Product(models.Model):
     # Newly added fields from db.md
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
-    search_vector = models.TextField(null=True, blank=True) # mapped tsvector to TextField
+    # search_vector is a generated column in DB, removed to avoid insert errors
     dimensions = models.JSONField(null=True, blank=True)
     shipping_required = models.BooleanField(null=True, blank=True)
     meta_title = models.TextField(null=True, blank=True)
@@ -48,7 +48,7 @@ class Product(models.Model):
     size_chart_template_id = models.UUIDField(null=True, blank=True)
     custom_size_chart_data = models.JSONField(null=True, blank=True)
     size_guide_type = models.TextField(null=True, blank=True)
-    embedding = models.TextField(null=True, blank=True) # mapped vector to TextField
+    # embedding is a vector column in DB, removed to avoid insert errors
     subtitle = models.TextField(null=True, blank=True)
     mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     currency = models.TextField(null=True, blank=True)
