@@ -2,15 +2,29 @@ from rest_framework import serializers
 from .models import Product, ProductReview, ProductQuestion
 
 class ProductListSerializer(serializers.ModelSerializer):
+    ratings = serializers.FloatField(source='rating', read_only=True)
+    category = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'price', 'images', 'rating', 'reviews',
+            'id', 'name', 'price', 'images', 'rating', 'ratings', 'reviews',
             'in_stock', 'discount_percentage', 'is_on_sale',
             'sale_price', 'is_featured', 'is_new_arrival',
             'sku', 'status', 'stock_quantity',
-            'category_id', 'subcategory_id',
+            'category_id', 'subcategory_id', 'category',
+            'sizes', 'base_currency', 'cod_allowed',
         ]
+        
+    def get_category(self, obj):
+        if not obj.category_id:
+            return None
+        from categories.models import Category
+        try:
+            cat = Category.objects.get(id=obj.category_id)
+            return cat.name
+        except Category.DoesNotExist:
+            return None
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     class Meta:

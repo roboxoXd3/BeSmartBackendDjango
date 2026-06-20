@@ -33,7 +33,7 @@ class ProductListView(generics.ListAPIView):
     search_fields = ['name', 'description', 'brand', 'sku']
     
     # Ordering fields
-    ordering_fields = ['price', 'added_date', 'rating', 'orders_count']
+    ordering_fields = ['price', 'added_date', 'created_at', 'rating', 'orders_count', 'reviews']
     ordering = ['-added_date']
 
     @extend_schema(
@@ -69,6 +69,7 @@ class OnSaleProductsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     queryset = Product.objects.filter(is_on_sale=True, status='active', approval_status='approved')
     serializer_class = ProductListSerializer
+    pagination_class = None
 
 class ProductSearchView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
