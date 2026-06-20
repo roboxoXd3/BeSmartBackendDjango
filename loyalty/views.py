@@ -45,6 +45,10 @@ class LoyaltyPointsView(views.APIView):
 
         return Response(data)
 
+    def post(self, request):
+        """Stub for frontend calling POST /api/loyalty/points/ to award points after checkout."""
+        return Response({"success": True, "message": "Points will be awarded upon order delivery."})
+
 class LoyaltyTransactionListView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = LoyaltyTransactionSerializer
@@ -145,9 +149,17 @@ class ValidateVoucherView(views.APIView):
             "minimum_order_amount": serializers.FloatField(required=False)
         })}
     )
+    def get(self, request):
+        code = (request.query_params.get('voucher_code') or request.query_params.get('voucherCode') or '').strip().upper()
+        subtotal = float(request.query_params.get('order_subtotal') or request.query_params.get('orderAmount') or 0)
+        return self._validate(request, code, subtotal)
+
     def post(self, request):
         code = (request.data.get('voucher_code') or request.data.get('voucherCode') or '').strip().upper()
         subtotal = float(request.data.get('order_subtotal') or request.data.get('orderAmount') or 0)
+        return self._validate(request, code, subtotal)
+
+    def _validate(self, request, code, subtotal):
         if not code:
             return Response({"valid": False, "error": "Voucher code required"})
         v = LoyaltyVoucher.objects.filter(user=request.user, voucher_code=code, status='active', expires_at__gt=timezone.now()).first()

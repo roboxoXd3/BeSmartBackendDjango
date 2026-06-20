@@ -28,14 +28,29 @@ class LoyaltyTransactionSerializer(serializers.ModelSerializer):
         read_only_fields = ['user_id', 'created_at']
 
 class LoyaltyRewardSerializer(serializers.ModelSerializer):
+    can_redeem_more = serializers.SerializerMethodField()
+
     class Meta:
         model = LoyaltyReward
         fields = '__all__'
+
+    from drf_spectacular.utils import extend_schema_field
+    @extend_schema_field(serializers.BooleanField())
+    def get_can_redeem_more(self, obj):
+        if not obj.max_redemptions_per_user:
+            return True
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return True
+        count = LoyaltyVoucher.objects.filter(user=request.user, reward=obj).count()
+        return count < obj.max_redemptions_per_user
 
 class LoyaltyVoucherSerializer(serializers.ModelSerializer):
     user_id = serializers.UUIDField(source='user.id', read_only=True)
     reward_id = serializers.UUIDField(source='reward.id', read_only=True)
     reward_name = serializers.CharField(source='reward.name', read_only=True)
+
+    reward_type = serializers.CharField(source='discount_type', read_only=True)
 
     order_id = serializers.SerializerMethodField()
 
@@ -48,13 +63,13 @@ class LoyaltyVoucherSerializer(serializers.ModelSerializer):
         model = LoyaltyVoucher
         fields = [
             'id', 'user_id', 'reward_id', 'reward_name', 'voucher_code',
-            'points_spent', 'discount_type', 'discount_value',
+            'points_spent', 'discount_type', 'reward_type', 'discount_value',
             'minimum_order_amount', 'status', 'redeemed_at', 'expires_at',
             'used_at', 'order_id', 'created_at',
         ]
         read_only_fields = [
             'user_id', 'reward_id', 'voucher_code', 'created_at',
-            'redeemed_at', 'expires_at', 'reward_name', 'order_id',
+            'redeemed_at', 'expires_at', 'reward_name', 'reward_type', 'order_id',
         ]
 
 class LoyaltyBadgeSerializer(serializers.ModelSerializer):
