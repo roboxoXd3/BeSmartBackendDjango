@@ -6,7 +6,7 @@ from .serializers import (
     AdminUserSerializer, AdminActionLogSerializer, 
     AppSettingsSerializer, UserManagementSerializer,
     VendorAdminSerializer, PayoutAdminSerializer,
-    TransactionAdminSerializer
+    TransactionAdminSerializer, OrderAdminSerializer
 )
 from users.models import User
 from vendors.models import Vendor
@@ -17,8 +17,10 @@ from products.serializers import ProductListSerializer, ProductDetailSerializer
 from orders.serializers import OrderSerializer
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-from rest_framework import serializers
+from rest_framework import serializers, filters
 from rest_framework.decorators import action
+from django_filters.rest_framework import DjangoFilterBackend
+import django_filters
 
 class IsAdminUser(permissions.BasePermission):
     """
@@ -105,7 +107,8 @@ class VendorAdminViewSet(viewsets.ModelViewSet):
     def status(self, request, pk=None):
         vendor = self.get_object()
         new_status = request.data.get('status')
-        admin_notes = request.data.get('admin_notes')
+        # Map 'notes' to 'admin_notes' if provided (frontend compatibility)
+        admin_notes = request.data.get('admin_notes') or request.data.get('notes')
         
         if new_status in dict(Vendor.STATUS_CHOICES).keys():
             vendor.status = new_status
@@ -123,27 +126,72 @@ class SystemStatsView(views.APIView):
         responses={200: inline_serializer(
             name="AdminStatsResponse",
             fields={
-                "total_users": serializers.IntegerField(),
-                "total_vendors": serializers.IntegerField(),
-                "total_orders": serializers.IntegerField(),
-                "pending_vendors": serializers.IntegerField(),
-                "total_revenue": serializers.FloatField(),
-                "pending_payouts": serializers.FloatField()
+                "success": serializers.BooleanField(),
+                "data": inline_serializer(
+                    name="AdminStatsData",
+                    fields={
+                        "totalUsers": serializers.IntegerField(),
+                        "totalVendors": serializers.IntegerField(),
+                        "totalOrders": serializers.IntegerField(),
+                        "totalProducts": serializers.IntegerField(),
+                        "pendingVendors": serializers.IntegerField(),
+                        "totalRevenue": serializers.FloatField(),
+                        "avgOrderValue": serializers.FloatField(),
+                        "pendingPayouts": serializers.FloatField(),
+                        "ordersChange": serializers.FloatField(),
+                        "vendorsChange": serializers.FloatField(),
+                        "revenueChange": serializers.FloatField(),
+                        "avgOrderValueChange": serializers.FloatField(),
+                    }
+                )
             }
         )}
     )
     def get(self, request):
-        from django.db.models import Sum
+        from django.db.models import Sum, Avg
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        now = timezone.now()
+        thirty_days_ago = now - timedelta(days=30)
+        sixty_days_ago = now - timedelta(days=60)
+        
         total_revenue = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
+        avg_order_value = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(avg=Avg('total'))['avg'] or 0.00
         total_payouts_pending = VendorPayout.objects.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0.00
+        
+        # Previous period
+        prev_orders = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago).count()
+        curr_orders = Order.objects.filter(created_at__gte=thirty_days_ago).count()
+        orders_change = ((curr_orders - prev_orders) / max(prev_orders, 1)) * 100
+        
+        prev_vendors = Vendor.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago).count()
+        curr_vendors = Vendor.objects.filter(created_at__gte=thirty_days_ago).count()
+        vendors_change = ((curr_vendors - prev_vendors) / max(prev_vendors, 1)) * 100
+        
+        prev_rev = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
+        prev_revenue = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
+        revenue_change = ((float(total_revenue) - float(prev_revenue)) / max(float(prev_revenue), 1)) * 100
+
+        prev_aov = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(avg=Avg('total'))['avg'] or 0.00
+        aov_change = ((float(avg_order_value) - float(prev_aov)) / max(float(prev_aov), 1)) * 100
             
         return Response({
-            "total_users": User.objects.count(),
-            "total_vendors": Vendor.objects.count(),
-            "total_orders": Order.objects.count(),
-            "pending_vendors": Vendor.objects.filter(status='pending').count(),
-            "total_revenue": float(total_revenue),
-            "pending_payouts": float(total_payouts_pending)
+            "success": True,
+            "data": {
+                "totalUsers": User.objects.count(),
+                "totalVendors": Vendor.objects.count(),
+                "totalOrders": Order.objects.count(),
+                "totalProducts": Product.objects.count(),
+                "pendingVendors": Vendor.objects.filter(status='pending').count(),
+                "totalRevenue": round(float(total_revenue), 2),
+                "avgOrderValue": round(float(avg_order_value), 2),
+                "pendingPayouts": round(float(total_payouts_pending), 2),
+                "ordersChange": round(float(orders_change), 2),
+                "vendorsChange": round(float(vendors_change), 2),
+                "revenueChange": round(float(revenue_change), 2),
+                "avgOrderValueChange": round(float(aov_change), 2),
+            }
         })
 
 class AdminRecentActivityView(views.APIView):
@@ -230,9 +278,21 @@ class AdminRevenueChartView(views.APIView):
             "period": period
         })
 
+class ProductAdminFilter(django_filters.FilterSet):
+    category = django_filters.UUIDFilter(field_name='category_id')
+    vendor = django_filters.UUIDFilter(field_name='vendor_id')
+
+    class Meta:
+        model = Product
+        fields = ['approval_status', 'status']
+
 class ProductAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = Product.objects.all().order_by('-added_date')
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = ProductAdminFilter
+    search_fields = ['name', 'description']
+    ordering_fields = ['added_date', 'price', 'stock']
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -245,6 +305,48 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
         products = self.get_queryset().filter(approval_status='pending')
         serializer = self.get_serializer(products, many=True)
         return Response({'data': serializer.data})
+
+    @extend_schema(
+        summary="Approve a product",
+        request=inline_serializer(
+            name="ProductApproveRequest",
+            fields={"action": serializers.CharField(required=False)}
+        ),
+        responses={200: inline_serializer(
+            name="ProductStatusAdminResponse",
+            fields={"status": serializers.CharField(), "approval_status": serializers.CharField()}
+        )}
+    )
+    @action(detail=True, methods=['post', 'patch'], url_path='approve')
+    def approve(self, request, pk=None):
+        product = self.get_object()
+        product.approval_status = 'approved'
+        product.save(update_fields=['approval_status'])
+        return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
+
+    @extend_schema(
+        summary="Reject a product",
+        request=inline_serializer(
+            name="ProductRejectRequest",
+            fields={
+                "action": serializers.CharField(required=False),
+                "notes": serializers.CharField(required=False, allow_blank=True)
+            }
+        ),
+        responses={200: inline_serializer(
+            name="ProductStatusAdminResponse",
+            fields={"status": serializers.CharField(), "approval_status": serializers.CharField()}
+        )}
+    )
+    @action(detail=True, methods=['post', 'patch'], url_path='reject')
+    def reject(self, request, pk=None):
+        product = self.get_object()
+        product.approval_status = 'rejected'
+        if 'notes' in request.data:
+            # Note: We might need a notes field on the product model or admin log
+            pass
+        product.save(update_fields=['approval_status'])
+        return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
     @extend_schema(
         summary="Update product status (approve/reject)",
@@ -267,10 +369,25 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
             return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
         return Response({'error': 'invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
+class OrderAdminFilter(django_filters.FilterSet):
+    dateFrom = django_filters.DateTimeFilter(field_name='created_at', lookup_expr='gte')
+    dateTo = django_filters.DateTimeFilter(field_name='created_at', lookup_expr='lte')
+    minAmount = django_filters.NumberFilter(field_name='total', lookup_expr='gte')
+    maxAmount = django_filters.NumberFilter(field_name='total', lookup_expr='lte')
+    vendorId = django_filters.UUIDFilter(field_name='order_items__product__vendor_id')
+
+    class Meta:
+        model = Order
+        fields = ['status']
+
 class OrderAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = Order.objects.all().order_by('-created_at')
-    serializer_class = OrderSerializer
+    queryset = Order.objects.select_related('user').prefetch_related('items', 'items__product').all().order_by('-created_at').distinct()
+    serializer_class = OrderAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = OrderAdminFilter
+    search_fields = ['order_number', 'user__email', 'user__first_name', 'user__last_name']
+    ordering_fields = ['created_at', 'total']
 
     @extend_schema(
         summary="Update order status",

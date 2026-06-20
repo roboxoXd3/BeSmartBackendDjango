@@ -56,9 +56,13 @@ class CurrencyRateListView(views.APIView):
             })
 
         return Response({
-            'supportedCurrencies': supported,
-            'exchangeRates': dict(exchange_rates),
-            'lastUpdated': last_updated.isoformat() if last_updated else None,
+            'success': True,
+            'data': {
+                'supportedCurrencies': supported,
+                'exchangeRates': dict(exchange_rates),
+                'lastUpdated': last_updated.isoformat() if last_updated else None,
+                'defaultCurrency': 'USD' # Or whatever the default is, next.js expects this
+            }
         })
 
 
