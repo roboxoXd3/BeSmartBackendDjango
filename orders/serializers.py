@@ -2,6 +2,8 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from .models import Cart, CartItem, Order, OrderItem, Wishlist, ShippingAddress
 from products.serializers import ProductListSerializer
+from payments.models import PaymentMethod
+from payments.serializers import PaymentMethodSerializer
 
 
 class ShippingAddressSerializer(serializers.ModelSerializer):
@@ -49,19 +51,41 @@ class WishlistSerializer(serializers.ModelSerializer):
         fields = ['id', 'product', 'product_id', 'created_at']
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    product = ProductListSerializer(read_only=True)
+    products = ProductListSerializer(source='product', read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'quantity', 'price', 'selected_size', 'selected_color']
+        fields = ['id', 'products', 'quantity', 'price', 'selected_size', 'selected_color']
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
+    order_items = OrderItemSerializer(source='items', many=True, read_only=True)
+    shipping_address = serializers.SerializerMethodField()
+    payment_method = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
         fields = '__all__'
         read_only_fields = ['user', 'order_number', 'created_at', 'updated_at', 'status']
+
+    @extend_schema_field(ShippingAddressSerializer)
+    def get_shipping_address(self, obj):
+        if obj.address_id:
+            try:
+                addr = ShippingAddress.objects.get(id=obj.address_id)
+                return ShippingAddressSerializer(addr).data
+            except ShippingAddress.DoesNotExist:
+                return None
+        return None
+
+    @extend_schema_field(PaymentMethodSerializer)
+    def get_payment_method(self, obj):
+        if obj.payment_method_id:
+            try:
+                pm = PaymentMethod.objects.get(id=obj.payment_method_id)
+                return PaymentMethodSerializer(pm).data
+            except PaymentMethod.DoesNotExist:
+                return None
+        return None
 
 class OrderItemInputSerializer(serializers.Serializer):
     """For direct item-list order creation (Gap 27: cart mismatch)."""
