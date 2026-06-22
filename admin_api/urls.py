@@ -5,7 +5,8 @@ from .views import (
     SystemStatsView, AdminRecentActivityView, AdminRevenueChartView,
     UserAdminViewSet, VendorAdminViewSet, AppSettingsViewSet,
     ProductAdminViewSet, OrderAdminViewSet,
-    PayoutAdminViewSet, TransactionAdminViewSet, LoyaltyAdminViewSet
+    PayoutAdminViewSet, TransactionAdminViewSet, LoyaltyAdminViewSet,
+    CategoryAdminViewSet, SubcategoryAdminViewSet
 )
 
 router = DefaultRouter()
@@ -18,7 +19,8 @@ router.register(r'orders', OrderAdminViewSet, basename='admin-orders')
 router.register(r'payouts', PayoutAdminViewSet, basename='admin-payouts')
 router.register(r'transactions', TransactionAdminViewSet, basename='admin-transactions')
 router.register(r'loyalty', LoyaltyAdminViewSet, basename='admin-loyalty')
-
+router.register(r'categories', CategoryAdminViewSet, basename='admin-categories')
+router.register(r'subcategories', SubcategoryAdminViewSet, basename='admin-subcategories')
 urlpatterns = [
     path('logs/', AdminActionLogListView.as_view(), name='admin-logs'),
     path('dashboard/stats/', SystemStatsView.as_view(), name='admin-system-stats'),

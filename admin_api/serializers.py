@@ -5,6 +5,8 @@ from users.models import User
 from vendors.models import Vendor, VendorPayout, PayoutTransaction
 from orders.serializers import OrderSerializer
 from orders.models import Order
+from categories.models import Category, Subcategory
+from loyalty.models import LoyaltyPoints, LoyaltyTransaction
 
 class AdminUserSerializer(serializers.ModelSerializer):
     user_details = UserSerializer(source='user', read_only=True)
@@ -117,3 +119,23 @@ class OrderAdminSerializer(OrderSerializer):
         except Exception as e:
             print("Error in get_vendors:", e)
             return []
+
+class CategoryAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = '__all__'
+
+class SubcategoryAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subcategory
+        fields = '__all__'
+
+class LoyaltyPointsAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltyPoints
+        fields = '__all__'
+
+class LoyaltyTransactionAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltyTransaction
+        fields = '__all__'

@@ -3,11 +3,16 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import AdminUser, AdminActionLog, AppSettings
 from .serializers import (
-    AdminUserSerializer, AdminActionLogSerializer, 
+    AdminUserSerializer, AdminActionLogSerializer,
     AppSettingsSerializer, UserManagementSerializer,
     VendorAdminSerializer, PayoutAdminSerializer,
-    TransactionAdminSerializer, OrderAdminSerializer
+    TransactionAdminSerializer, OrderAdminSerializer,
+    CategoryAdminSerializer, SubcategoryAdminSerializer,
+    LoyaltyPointsAdminSerializer, LoyaltyTransactionAdminSerializer
 )
+from categories.models import Category, Subcategory
+from loyalty.models import LoyaltyPoints, LoyaltyTransaction
+from django.db import transaction
 from users.models import User
 from vendors.models import Vendor
 from orders.models import Order
@@ -454,32 +459,74 @@ class TransactionAdminViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PayoutTransaction.objects.all().order_by('-created_at')
     serializer_class = TransactionAdminSerializer
 
+class CategoryAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = Category.objects.all().order_by('name')
+    serializer_class = CategoryAdminSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+
+class SubcategoryAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = Subcategory.objects.all().order_by('name')
+    serializer_class = SubcategoryAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['category']
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+
 class LoyaltyAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = User.objects.all()
-    serializer_class = UserManagementSerializer # Or a dedicated Loyalty user serializer
+    serializer_class = UserManagementSerializer
 
     @extend_schema(
-        summary="Add loyalty points to user",
+        summary="Add/Deduct loyalty points for a user",
         request=inline_serializer(
             name="LoyaltyPointsAdminRequest",
-            fields={"points": serializers.IntegerField()}
+            fields={
+                "points": serializers.IntegerField(),
+                "description": serializers.CharField(required=False, allow_blank=True)
+            }
         ),
         responses={200: inline_serializer(
             name="LoyaltyPointsAdminResponse",
             fields={
-                "message": serializers.CharField(), 
-                "loyalty_points_earned": serializers.IntegerField(required=False),
-                "user": serializers.CharField(required=False)
+                "message": serializers.CharField(),
+                "points_balance": serializers.IntegerField(),
+                "user": serializers.CharField()
             }
         )}
     )
     @action(detail=True, methods=['post'], url_path='points')
     def points(self, request, pk=None):
         user = self.get_object()
-        points = int(request.data.get('points', 0))
-        if points != 0 and hasattr(user, 'loyalty_points_earned'):
-            user.loyalty_points_earned += points
-            user.save(update_fields=['loyalty_points_earned'])
-            return Response({'message': f'{points} points applied.', 'loyalty_points_earned': user.loyalty_points_earned})
-        return Response({'message': f'{points} points (simulated).', 'user': user.id})
+        points_change = int(request.data.get('points', 0))
+        description = request.data.get('description', 'Admin manual adjustment')
+        
+        if points_change == 0:
+            loyalty, _ = LoyaltyPoints.objects.get_or_create(user=user)
+            return Response({'message': 'No change applied.', 'points_balance': loyalty.points_balance, 'user': str(user.id)})
+
+        with transaction.atomic():
+            loyalty, _ = LoyaltyPoints.objects.get_or_create(user=user)
+            loyalty.points_balance += points_change
+            if points_change > 0:
+                loyalty.lifetime_points += points_change
+            loyalty.save()
+
+            LoyaltyTransaction.objects.create(
+                user=user,
+                points_change=points_change,
+                transaction_type='adjustment',
+                reference_type='admin',
+                description=description,
+                points_balance_after=loyalty.points_balance
+            )
+
+        return Response({
+            'message': f'{points_change} points applied.',
+            'points_balance': loyalty.points_balance,
+            'user': str(user.id)
+        })
