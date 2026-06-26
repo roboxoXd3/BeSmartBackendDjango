@@ -15,14 +15,15 @@ from products.serializers import (
 from .models import (
     Vendor, VendorReview, VendorBankAccount, VendorPayout,
     VendorFollow, PayoutTransaction, SubscriptionPlan, VendorSubscription,
-    VendorSizeChartTemplate
+    VendorSizeChartTemplate, VendorSessions
 )
 from .serializers import (
     VendorSerializer, VendorRegisterSerializer, VendorReviewSerializer,
     VendorReviewCreateSerializer, VendorBankAccountSerializer, VendorPayoutSerializer,
     SubscriptionPlanSerializer, VendorSubscriptionSerializer,
     VendorSizeChartTemplateSerializer,
-    VendorListSerializer, VendorDetailSerializer
+    VendorListSerializer, VendorDetailSerializer,
+    VendorSessionSerializer
 )
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from drf_spectacular.types import OpenApiTypes
@@ -960,3 +961,13 @@ class VendorProductQAViewSet(viewsets.ReadOnlyModelViewSet):
             
         qa.save()
         return Response(self.get_serializer(qa).data)
+
+class VendorSessionViewSet(viewsets.ModelViewSet):
+    """
+    Internal API for the Next.js vendor BFF to manage vendor sessions.
+    Lookup field is session_token.
+    """
+    permission_classes = [permissions.AllowAny]
+    queryset = VendorSessions.objects.all()
+    serializer_class = VendorSessionSerializer
+    lookup_field = 'session_token'

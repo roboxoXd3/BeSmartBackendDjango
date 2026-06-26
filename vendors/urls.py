@@ -14,7 +14,7 @@ from .views import (
     VendorOrderViewSet, VendorEscrowViewSet, VendorTransactionViewSet,
     VendorPayoutSummaryView,
     VendorProductReviewViewSet, VendorProductQAViewSet,
-    VendorProductSizeChartAssignView,
+    VendorProductSizeChartAssignView, VendorSessionViewSet
 )
 
 router = DefaultRouter()
@@ -26,6 +26,7 @@ router.register(r'bank-accounts', VendorBankAccountViewSet, basename='vendor-ban
 router.register(r'size-charts', VendorSizeChartTemplateViewSet, basename='vendor-size-chart')
 router.register(r'reviews', VendorProductReviewViewSet, basename='vendor-reviews-mgmt')
 router.register(r'product-qa', VendorProductQAViewSet, basename='vendor-product-qa')
+router.register(r'sessions', VendorSessionViewSet, basename='vendor-sessions')
 
 urlpatterns = [
     # Static paths first (before <uuid:id>/ patterns)

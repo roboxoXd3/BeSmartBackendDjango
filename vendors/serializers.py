@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Vendor, VendorReview, VendorBankAccount, VendorPayout, 
     PayoutTransaction, SubscriptionPlan, VendorSubscription, 
-    VendorSizeChartTemplate, VendorFollow
+    VendorSizeChartTemplate, VendorFollow, VendorSessions
 )
 from users.serializers import UserSerializer
 from drf_spectacular.utils import extend_schema_field
@@ -139,3 +139,9 @@ class VendorSizeChartTemplateSerializer(serializers.ModelSerializer):
             'vendor', 'approval_status', 'approved_by', 'approved_at', 
             'rejection_reason', 'created_at', 'updated_at', 'migration_completed_at'
         ]
+
+class VendorSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VendorSessions
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
