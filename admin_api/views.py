@@ -4,13 +4,16 @@ from django.shortcuts import get_object_or_404
 from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from .serializers import (
     AdminUserSerializer, AdminActionLogSerializer,
-    AppSettingsSerializer, UserManagementSerializer,
+    AppSettingsSerializer, UserManagementSerializer, UserAdminCreateUpdateSerializer,
     VendorAdminSerializer, PayoutAdminSerializer,
     TransactionAdminSerializer, OrderAdminSerializer,
     CategoryAdminSerializer, SubcategoryAdminSerializer,
     LoyaltyPointsAdminSerializer, LoyaltyTransactionAdminSerializer,
     AdminSessionSerializer
 )
+from content.models import PromotionalBanner
+from django.core.files.storage import default_storage
+from rest_framework.parsers import MultiPartParser, FormParser
 from categories.models import Category, Subcategory
 from loyalty.models import LoyaltyPoints, LoyaltyTransaction
 from django.db import transaction
@@ -69,7 +72,11 @@ class AppSettingsViewSet(viewsets.ModelViewSet):
 class UserAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = User.objects.all().order_by('-date_joined')
-    serializer_class = UserManagementSerializer
+    
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return UserAdminCreateUpdateSerializer
+        return UserManagementSerializer
 
     @extend_schema(
         summary="Update user status (suspend/activate)",
@@ -541,3 +548,119 @@ class LoyaltyAdminViewSet(viewsets.ModelViewSet):
             'points_balance': loyalty.points_balance,
             'user': str(user.id)
         })
+
+class AdminProductImageUploadView(views.APIView):
+    """POST /api/admin/products/{id}/images/ and DELETE /api/admin/products/{id}/images/"""
+    permission_classes = [IsAdminUser]
+    from rest_framework.parsers import JSONParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @extend_schema(
+        summary="Upload product image (Admin)",
+        request=inline_serializer("AdminProductImageUploadReq", {"image": serializers.ImageField()}),
+        responses={200: inline_serializer("AdminProductImageUploadResp", {"status": serializers.CharField(), "image_url": serializers.CharField()})}
+    )
+    def post(self, request, id):
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        product = get_object_or_404(Product, id=id)
+        # We can store in product-images/ path
+        path = f"product-images/{product.id}/{image_file.name}"
+        saved_path = default_storage.save(path, image_file)
+        image_url = default_storage.url(saved_path)
+
+        # Append to product's images array
+        # Try to parse string if it was somehow stored as a string
+        images_list = product.images or []
+        if isinstance(images_list, str):
+            try:
+                import ast
+                parsed = ast.literal_eval(images_list)
+                images_list = parsed if isinstance(parsed, list) else [images_list]
+            except:
+                images_list = [images_list]
+
+        if image_url not in images_list:
+            images_list.append(image_url)
+            
+        product.images = list(images_list)
+        product.save(update_fields=['images'])
+
+        return Response({'status': 'Image uploaded successfully', 'image_url': image_url})
+
+    @extend_schema(
+        summary="Remove product image (Admin)",
+        request=inline_serializer("AdminProductImageDeleteReq", {"image_url": serializers.CharField()}),
+        responses={200: inline_serializer("AdminProductImageDeleteResp", {"status": serializers.CharField()})}
+    )
+    def delete(self, request, id):
+        image_url = request.data.get('image_url')
+        if not image_url:
+            return Response({'error': 'image_url is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        product = get_object_or_404(Product, id=id)
+        
+        images_list = product.images or [] or []
+        if isinstance(images_list, str):
+            try:
+                import ast
+                parsed = ast.literal_eval(images_list)
+                images_list = parsed if isinstance(parsed, list) else [images_list]
+            except:
+                images_list = [images_list]
+                
+        if image_url in images_list:
+            images_list.remove(image_url)
+            product.images = list(images_list)
+            product.save(update_fields=['images'])
+            
+            # Optional: Delete from storage
+            try:
+                # Extract path from URL if possible
+                pass
+            except Exception:
+                pass
+                
+            return Response({'status': 'Image removed successfully'})
+        return Response({'error': 'Image URL not found in product'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminBannerImageUploadView(views.APIView):
+    """POST /api/admin/content/banners/{id}/images/ and DELETE /api/admin/content/banners/{id}/images/"""
+    permission_classes = [IsAdminUser]
+    from rest_framework.parsers import JSONParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @extend_schema(
+        summary="Upload banner background image (Admin)",
+        request=inline_serializer("AdminBannerImageUploadReq", {"image": serializers.ImageField()}),
+        responses={200: inline_serializer("AdminBannerImageUploadResp", {"status": serializers.CharField(), "image_url": serializers.CharField()})}
+    )
+    def post(self, request, id):
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        banner = get_object_or_404(PromotionalBanner, id=id)
+        path = f"banners/{banner.id}/{image_file.name}"
+        saved_path = default_storage.save(path, image_file)
+        image_url = default_storage.url(saved_path)
+
+        banner.background_image_url = image_url
+        banner.save(update_fields=['background_image_url'])
+
+        return Response({'status': 'Banner image uploaded successfully', 'image_url': image_url})
+
+    @extend_schema(
+        summary="Remove banner background image (Admin)",
+        responses={200: inline_serializer("AdminBannerImageDeleteResp", {"status": serializers.CharField()})}
+    )
+    def delete(self, request, id):
+        banner = get_object_or_404(PromotionalBanner, id=id)
+        if banner.background_image_url:
+            banner.background_image_url = None
+            banner.save(update_fields=['background_image_url'])
+            return Response({'status': 'Banner image removed successfully'})
+        return Response({'error': 'Banner has no background image'}, status=status.HTTP_400_BAD_REQUEST)

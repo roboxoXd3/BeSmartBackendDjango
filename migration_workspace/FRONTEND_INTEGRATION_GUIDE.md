@@ -90,3 +90,73 @@ The logic remains unchanged. However, the direct SDK calls must be swapped for s
   ```
 - **Update Session:** `PATCH /api/vendors/sessions/{session_token}/`
 - **Delete Session:** `DELETE /api/vendors/sessions/{session_token}/`
+
+---
+
+## 4. User and Admin Creation & Updates
+
+### Previously (Supabase SDK)
+User creation involved using `supabase.auth.admin.createUser` to create the auth identity, followed by direct database inserts/updates to the `users` table via `supabase.from('users')`.
+
+### New Django Endpoints
+Replace the Supabase Admin Auth calls and database inserts with the following dedicated endpoints. The backend will automatically handle hashing the password and securely storing the user data.
+
+- **Create User (Admin context):** `POST /api/admin/users/`
+  - **Payload:**
+    ```json
+    {
+      "email": "user@example.com",
+      "password": "SecurePassword123!",
+      "first_name": "John",
+      "last_name": "Doe",
+      "is_active": true
+    }
+    ```
+- **Update User (Admin context):** `PATCH /api/admin/users/{user_id}/`
+  - **Payload:** JSON containing updated user fields.
+
+---
+
+## 5. Storage / Image Uploads (Admin Context)
+
+### Previously (Supabase SDK)
+The frontend uploaded files directly to Supabase Storage using `supabase.storage.from('bucket').upload(...)` and then manually updated the database column using `supabase.from('table').update({ image: ... })`.
+
+### New Django Endpoints
+Send the image via `multipart/form-data` to the backend. The backend handles securely storing the file (e.g. to R2) and automatically updating the relevant database entity.
+
+#### Product Image Uploads
+- **Upload Image:** `POST /api/admin/products/{product_id}/images/`
+  - **Payload:** `multipart/form-data` containing the file in the `image` field.
+  - **Response:**
+    ```json
+    {
+      "status": "Image uploaded successfully",
+      "image_url": "https://..."
+    }
+    ```
+- **Delete Image:** `DELETE /api/admin/products/{product_id}/images/`
+  - **Payload:**
+    ```json
+    {
+      "image_url": "https://..."
+    }
+    ```
+
+#### Banner Image Uploads
+- **Upload Image:** `POST /api/admin/content/banners/{banner_id}/images/`
+  - **Payload:** `multipart/form-data` containing the file in the `image` field.
+  - **Response:**
+    ```json
+    {
+      "status": "Image uploaded successfully",
+      "image_url": "https://..."
+    }
+    ```
+- **Delete Image:** `DELETE /api/admin/content/banners/{banner_id}/images/`
+  - **Payload:**
+    ```json
+    {
+      "image_url": "https://..."
+    }
+    ```

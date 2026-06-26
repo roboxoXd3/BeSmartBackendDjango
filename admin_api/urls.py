@@ -6,7 +6,8 @@ from .views import (
     UserAdminViewSet, VendorAdminViewSet, AppSettingsViewSet,
     ProductAdminViewSet, OrderAdminViewSet,
     PayoutAdminViewSet, TransactionAdminViewSet, LoyaltyAdminViewSet,
-    CategoryAdminViewSet, SubcategoryAdminViewSet, AdminSessionViewSet
+    CategoryAdminViewSet, SubcategoryAdminViewSet, AdminSessionViewSet,
+    AdminProductImageUploadView, AdminBannerImageUploadView
 )
 
 router = DefaultRouter()
@@ -27,5 +28,7 @@ urlpatterns = [
     path('dashboard/stats/', SystemStatsView.as_view(), name='admin-system-stats'),
     path('dashboard/recent-activity/', AdminRecentActivityView.as_view(), name='admin-recent-activity'),
     path('dashboard/revenue-chart/', AdminRevenueChartView.as_view(), name='admin-revenue-chart'),
+    path('products/<uuid:id>/images/', AdminProductImageUploadView.as_view(), name='admin-product-image-upload'),
+    path('content/banners/<uuid:id>/images/', AdminBannerImageUploadView.as_view(), name='admin-banner-image-upload'),
     path('', include(router.urls)),
 ]
