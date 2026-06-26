@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AdminUser, AdminActionLog, AppSettings
+from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from users.serializers import UserSerializer
 from users.models import User
 from vendors.models import Vendor, VendorPayout, PayoutTransaction
@@ -15,6 +15,14 @@ class AdminUserSerializer(serializers.ModelSerializer):
         model = AdminUser
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'last_login_at']
+
+class AdminSessionSerializer(serializers.ModelSerializer):
+    admin_user = AdminUserSerializer(source='admin', read_only=True)
+    
+    class Meta:
+        model = AdminSession
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
 
 class AdminActionLogSerializer(serializers.ModelSerializer):
     admin_name = serializers.CharField(source='admin.full_name', read_only=True)

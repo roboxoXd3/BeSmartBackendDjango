@@ -6,11 +6,12 @@ from .views import (
     UserAdminViewSet, VendorAdminViewSet, AppSettingsViewSet,
     ProductAdminViewSet, OrderAdminViewSet,
     PayoutAdminViewSet, TransactionAdminViewSet, LoyaltyAdminViewSet,
-    CategoryAdminViewSet, SubcategoryAdminViewSet
+    CategoryAdminViewSet, SubcategoryAdminViewSet, AdminSessionViewSet
 )
 
 router = DefaultRouter()
 router.register(r'admin-users', AdminUserViewSet, basename='admin-user')
+router.register(r'sessions', AdminSessionViewSet, basename='admin-sessions')
 router.register(r'settings', AppSettingsViewSet, basename='app-settings')
 router.register(r'users', UserAdminViewSet, basename='admin-users')
 router.register(r'vendors', VendorAdminViewSet, basename='admin-vendors')

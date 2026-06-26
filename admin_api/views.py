@@ -1,14 +1,15 @@
 from rest_framework import generics, permissions, status, views, viewsets
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import AdminUser, AdminActionLog, AppSettings
+from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from .serializers import (
     AdminUserSerializer, AdminActionLogSerializer,
     AppSettingsSerializer, UserManagementSerializer,
     VendorAdminSerializer, PayoutAdminSerializer,
     TransactionAdminSerializer, OrderAdminSerializer,
     CategoryAdminSerializer, SubcategoryAdminSerializer,
-    LoyaltyPointsAdminSerializer, LoyaltyTransactionAdminSerializer
+    LoyaltyPointsAdminSerializer, LoyaltyTransactionAdminSerializer,
+    AdminSessionSerializer
 )
 from categories.models import Category, Subcategory
 from loyalty.models import LoyaltyPoints, LoyaltyTransaction
@@ -38,6 +39,16 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = AdminUser.objects.all()
     serializer_class = AdminUserSerializer
+
+class AdminSessionViewSet(viewsets.ModelViewSet):
+    """
+    Internal API for the Next.js admin BFF to manage admin sessions.
+    Lookup field is session_token.
+    """
+    permission_classes = [permissions.AllowAny]
+    queryset = AdminSession.objects.all()
+    serializer_class = AdminSessionSerializer
+    lookup_field = 'session_token'
 
 class AdminActionLogListView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
