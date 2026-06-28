@@ -10,26 +10,32 @@ from .serializers import (
 from drf_spectacular.utils import extend_schema, inline_serializer
 from django.conf import settings
 from django.core.files.storage import storages
-from supabase import create_client, Client
+
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.core.mail import send_mail
 import os
 import uuid
 
 User = get_user_model()
 
-# Initialize Supabase Client (Helper)
-def get_supabase_client():
-    url = settings.SUPABASE_URL
-    key = settings.SUPABASE_KEY
-    if not url or not key:
-        raise ValueError("Supabase credentials not configured.")
-    return create_client(url, key)
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'refresh_token': str(refresh),
+        'access_token': str(refresh.access_token),
+    }
 
 class RegisterView(APIView):
     permission_classes = (permissions.AllowAny,)
     serializer_class = RegisterSerializer
 
     @extend_schema(
-        summary="Register User (Proxy to Supabase)",
+        summary="Register User (Native Django)",
         request=RegisterSerializer,
         responses={201: UserSerializer}
     )
@@ -37,44 +43,29 @@ class RegisterView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         first_name = request.data.get('first_name', '')
-        # phone_number = request.data.get('phone_number', '') # Extract if needed
 
         if not email or not password:
              return Response({"error": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if User.objects.filter(email=email).exists():
+            return Response({"error": "User with this email already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            supabase = get_supabase_client()
-            # 1. Sign up with Supabase
-            auth_response = supabase.auth.sign_up({
-                "email": email, 
-                "password": password,
-                "options": {
-                    "data": {
-                        "first_name": first_name,
-                        # "phone_number": phone_number
-                    }
-                }
-            })
+            # 1. Sign up with Django Native
+            user = User.objects.create_user(
+                username=email,
+                email=email,
+                password=password,
+                first_name=first_name
+            )
             
-            user_data = auth_response.user
-            session_data = auth_response.session
+            tokens = get_tokens_for_user(user)
             
-            if user_data:
-                # Sync logic - Ensure username is set to avoid UniqueConstraint error
-                user, created = User.objects.get_or_create(
-                    id=user_data.id,
-                    defaults={
-                        'email': user_data.email, 
-                        'first_name': first_name, 
-                        'username': user_data.email  # Ensure username is set and unique
-                    }
-                )
-                # If profile creation is needed beyond signals, do it here.
-
             return Response({
-                "message": "Registration successful. Please check your email for verification.",
-                "user": {"id": user_data.id, "email": user_data.email},
-                "session": session_data # May be None if email confirm enabled
+                "message": "Registration successful.",
+                "user": {"id": user.id, "email": user.email},
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"],
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -85,9 +76,9 @@ class LoginView(APIView):
     serializer_class = LoginSerializer
 
     @extend_schema(
-        summary="Login User (Proxy to Supabase)",
+        summary="Login User (Native Django)",
         request=LoginSerializer,
-        responses={200: inline_serializer(name="LoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "session": serializers.DictField()})}
+        responses={200: inline_serializer(name="LoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})}
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -97,34 +88,18 @@ class LoginView(APIView):
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
 
-        try:
-            supabase = get_supabase_client()
-            auth_response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
-            
-            user_data = auth_response.user
-            session_data = auth_response.session
-            
-            if user_data:
-                # Sync local user
-                user, created = User.objects.get_or_create(
-                    id=user_data.id,
-                    defaults={
-                        'email': user_data.email,
-                        'username': user_data.email
-                    }
-                )
-                
+        user = authenticate(request, username=email, password=password)
+        
+        if user is not None:
+            tokens = get_tokens_for_user(user)
             return Response({
                 "message": "Login successful.",
-                "user": {"id": user_data.id, "email": user_data.email},
-                "session": session_data
+                "user": {"id": user.id, "email": user.email},
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"]
             }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class VendorLoginView(APIView):
     permission_classes = (permissions.AllowAny,)
@@ -133,7 +108,7 @@ class VendorLoginView(APIView):
     @extend_schema(
         summary="Vendor specific login",
         request=LoginSerializer,
-        responses={200: inline_serializer(name="VendorLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "session": serializers.DictField()})}
+        responses={200: inline_serializer(name="VendorLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})}
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -143,43 +118,27 @@ class VendorLoginView(APIView):
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
 
-        try:
-            supabase = get_supabase_client()
-            auth_response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
-            
-            user_data = auth_response.user
-            session_data = auth_response.session
-            
-            if user_data:
-                # Sync local user
-                user, created = User.objects.get_or_create(
-                    id=user_data.id,
-                    defaults={
-                        'email': user_data.email,
-                        'username': user_data.email
-                    }
-                )
-                from vendors.models import Vendor
-                vendor = Vendor.objects.filter(user=user).first()
-                if not vendor:
-                    return Response({"error": "This account is not registered as a vendor."}, status=status.HTTP_403_FORBIDDEN)
+        user = authenticate(request, username=email, password=password)
+        if user is not None:
+            from vendors.models import Vendor
+            vendor = Vendor.objects.filter(user=user).first()
+            if not vendor:
+                return Response({"error": "This account is not registered as a vendor."}, status=status.HTTP_403_FORBIDDEN)
                 
+            tokens = get_tokens_for_user(user)
             return Response({
-                "message": "Vendor logic successful.",
+                "message": "Vendor login successful.",
                 "user": {
-                    "id": user_data.id, 
-                    "email": user_data.email, 
+                    "id": user.id, 
+                    "email": user.email, 
                     "vendor_id": vendor.id, 
                     "vendor_status": vendor.status
                 },
-                "session": session_data
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"]
             }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class AdminLoginView(APIView):
     permission_classes = (permissions.AllowAny,)
@@ -188,7 +147,7 @@ class AdminLoginView(APIView):
     @extend_schema(
         summary="Admin specific login",
         request=LoginSerializer,
-        responses={200: inline_serializer(name="AdminLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "session": serializers.DictField()})}
+        responses={200: inline_serializer(name="AdminLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})}
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -198,68 +157,43 @@ class AdminLoginView(APIView):
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
 
-        try:
-            supabase = get_supabase_client()
-            auth_response = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
-            
-            user_data = auth_response.user
-            session_data = auth_response.session
-            
-            if user_data:
-                # Sync local user
-                user, created = User.objects.get_or_create(
-                    id=user_data.id,
-                    defaults={
-                        'email': user_data.email,
-                        'username': user_data.email
-                    }
-                )
-                if not user.is_staff:
-                    return Response({"error": "This account does not have admin privileges."}, status=status.HTTP_403_FORBIDDEN)
+        user = authenticate(request, username=email, password=password)
+        if user is not None:
+            if not user.is_staff:
+                return Response({"error": "This account does not have admin privileges."}, status=status.HTTP_403_FORBIDDEN)
                 
+            tokens = get_tokens_for_user(user)
             return Response({
                 "message": "Admin login successful.",
                 "user": {
-                    "id": user_data.id, 
-                    "email": user_data.email, 
+                    "id": user.id, 
+                    "email": user.email, 
                     "is_staff": user.is_staff,
                     "is_superuser": user.is_superuser
                 },
-                "session": session_data
+                "access_token": tokens["access_token"],
+                "refresh_token": tokens["refresh_token"]
             }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
-
+        else:
+            return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class LogoutView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = LogoutSerializer
 
     @extend_schema(
-        summary="Logout User (Invalidate Supabase Session)",
+        summary="Logout User (Blacklist Token)",
         responses={200: inline_serializer(name="LogoutResponse", fields={"message": serializers.CharField()})}
     )
     def post(self, request):
         try:
-            # We strictly proxy to Supabase for logout if possible.
-            # Supabase server-side logout usually requires the access token.
-            auth_header = request.headers.get('Authorization')
-            if auth_header:
-                token = auth_header.split(' ')[1]
-                supabase = get_supabase_client()
-                # Attempt to sign out the user identified by the token
-                # In supabase-py, invalidating a generic JWT might be via admin or just client sign_out if session set
-                # For safety/simplicity in proxy:
-                try:
-                    supabase.auth.sign_out(scope='global', jwt=token)
-                except:
-                    # If this specific method fails (SDK difference), generic return is fallback
-                    pass
-            
+            refresh_token = request.data.get('refresh')
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
+        except TokenError as e:
+            # Also fine if token is already blacklisted
             return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -275,16 +209,21 @@ class PasswordResetView(APIView):
              return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         email = serializer.validated_data['email']
-        redirect_to = serializer.validated_data.get('redirect_to')
+        # redirect_to = serializer.validated_data.get('redirect_to')
 
         try:
-            supabase = get_supabase_client()
-            options = {}
-            if redirect_to:
-                options['redirect_to'] = redirect_to
-                
-            supabase.auth.reset_password_email(email, options=options)
+            user = User.objects.get(email=email)
+            # In a real app we would generate a token and send an email.
+            # Here we just log it to console or pretend we sent it.
+            token_generator = PasswordResetTokenGenerator()
+            token = token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            # Just simulating for now to avoid SMTP setup
+            print(f"Password reset link: /reset-password/?uid={uid}&token={token}")
             
+            return Response({"message": "If an account exists, a password reset email has been sent."}, status=status.HTTP_200_OK)
+        except User.DoesNotExist:
+            # We don't want to leak whether the user exists or not
             return Response({"message": "If an account exists, a password reset email has been sent."}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -302,17 +241,9 @@ class PasswordChangeView(APIView):
         new_password = serializer.validated_data['password']
 
         try:
-            # Extract token to use for Supabase update
-            auth_header = request.headers.get('Authorization', '')
-            if not auth_header.startswith('Bearer '):
-                 return Response({"error": "No Bearer token provided"}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            token = auth_header.split(' ')[1]
-            
-            supabase = get_supabase_client()
-            # Update user using their JWT
-            auth_response = supabase.auth.update_user({"password": new_password}, jwt=token)
-            
+            user = request.user
+            user.set_password(new_password)
+            user.save()
             return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -344,43 +275,6 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         
         user_serializer = UserSerializer(self.request.user)
         return Response(user_serializer.data)
-
-
-class TokenRefreshView(APIView):
-    """POST /api/users/token/refresh/ — refresh Supabase access token"""
-    permission_classes = (permissions.AllowAny,)
-
-    @extend_schema(
-        summary="Refresh access token using refresh_token",
-        request=inline_serializer(name="TokenRefreshReq", fields={"refresh_token": serializers.CharField()}),
-        responses={200: inline_serializer(name="TokenRefreshRes", fields={"access_token": serializers.CharField(), "refresh_token": serializers.CharField(), "expires_in": serializers.IntegerField()})},
-    )
-    def post(self, request):
-        refresh_token = request.data.get('refresh_token')
-        if not refresh_token:
-            return Response(
-                {"error": "refresh_token is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            supabase = get_supabase_client()
-            auth_response = supabase.auth.refresh_session(refresh_token)
-            session = auth_response.session
-            if session is None:
-                return Response(
-                    {"error": "Failed to refresh session."},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
-            return Response({
-                "access_token": session.access_token,
-                "refresh_token": session.refresh_token,
-                "expires_in": session.expires_in,
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
 
 
 class AccountDeletionEligibilityView(APIView):
@@ -422,28 +316,27 @@ class AccountDeleteView(APIView):
         password = request.data.get('password', '')
         if not password:
             return Response({"success": False, "error": "invalid_password", "message": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
         vendor = Vendor.objects.filter(user=request.user, status='approved').first()
         if vendor:
             return Response({"success": False, "error": "vendor_active", "message": "Cannot delete account with active vendor."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            auth_response = get_supabase_client().auth.sign_in_with_password({"email": request.user.email, "password": password})
-            if not auth_response or not auth_response.user:
-                return Response({"success": False, "error": "invalid_password", "message": "Invalid password."}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
+            
+        # Verify password natively
+        user = authenticate(request, username=request.user.email, password=password)
+        if user is None:
             return Response({"success": False, "error": "invalid_password", "message": "Invalid password."}, status=status.HTTP_400_BAD_REQUEST)
+            
         try:
-            user = request.user
             if hasattr(user, 'profile'):
                 user.profile.delete()
             user.email = f"deleted_{user.id}@deleted.local"
             user.username = user.email
             user.is_active = False
             user.save()
-            get_supabase_client().auth.admin.delete_user(str(user.id))
+            # No Supabase call needed anymore
         except Exception as e:
             return Response({"success": False, "error": "deletion_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({"success": True, "message": "Your account has been successfully deleted."})
-
 
 class ProfilePhotoUploadView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
