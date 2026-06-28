@@ -664,3 +664,156 @@ class AdminBannerImageUploadView(views.APIView):
             banner.save(update_fields=['background_image_url'])
             return Response({'status': 'Banner image removed successfully'})
         return Response({'error': 'Banner has no background image'}, status=status.HTTP_400_BAD_REQUEST)
+
+def _parse_version(v: str):
+    """Helper to convert '1.0.5' into (1, 0, 5) for comparison"""
+    try:
+        return tuple(int(x) for x in v.strip().split('.'))
+    except (ValueError, AttributeError):
+        return (0, 0, 0)
+
+class VersionCheckView(views.APIView):
+    """
+    Public API for the mobile app to check if an update is available.
+    POST /api/version-check/
+    """
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        summary="Check for app update",
+        request=inline_serializer(
+            name="VersionCheckRequest",
+            fields={
+                "platform": serializers.ChoiceField(choices=["android", "iOS"]),
+                "version": serializers.CharField()
+            }
+        ),
+        responses={200: inline_serializer(
+            name="VersionCheckResponse",
+            fields={
+                "status": serializers.IntegerField(),
+                "data": inline_serializer(
+                    name="VersionCheckData",
+                    fields={
+                        "isUpdateAvailable": serializers.BooleanField(),
+                        "playStoreUrl": serializers.CharField(allow_blank=True),
+                        "appStoreUrl": serializers.CharField(allow_blank=True),
+                    }
+                )
+            }
+        )}
+    )
+    def post(self, request):
+        platform = request.data.get('platform')
+        version = request.data.get('version')
+        
+        if not platform or not version:
+            return Response({"error": "platform and version are required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        platform_lower = platform.lower()
+        if platform_lower not in ['android', 'ios']:
+            return Response({"error": "platform must be 'android' or 'iOS'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get settings
+        version_setting = AppSettings.objects.filter(setting_key=f"app_version_{platform_lower}").first()
+        urls_setting = AppSettings.objects.filter(setting_key="app_store_urls").first()
+
+        latest_version = version_setting.setting_value.get('version', '1.0.0') if version_setting else '1.0.0'
+        
+        urls_data = urls_setting.setting_value if urls_setting else {}
+        play_store_url = urls_data.get('playStoreUrl', '')
+        app_store_url = urls_data.get('appStoreUrl', '')
+
+        # Compare versions
+        is_update_available = _parse_version(version) < _parse_version(latest_version)
+
+        # Build response
+        if not is_update_available:
+            play_store_url = ""
+            app_store_url = ""
+
+        return Response({
+            "status": 200,
+            "data": {
+                "isUpdateAvailable": is_update_available,
+                "playStoreUrl": play_store_url,
+                "appStoreUrl": app_store_url
+            }
+        })
+
+
+class AdminVersionUpdateView(views.APIView):
+    """
+    Internal API for the admin to manage app versions.
+    GET /api/admin/app-version/
+    PUT /api/admin/app-version/
+    """
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Get current app versions (Admin)",
+        responses={200: inline_serializer(
+            name="AdminAppVersionGetResponse",
+            fields={
+                "success": serializers.BooleanField(),
+                "data": inline_serializer(
+                    name="AdminAppVersionData",
+                    fields={
+                        "android": serializers.DictField(),
+                        "ios": serializers.DictField(),
+                        "urls": serializers.DictField()
+                    }
+                )
+            }
+        )}
+    )
+    def get(self, request):
+        android = AppSettings.objects.filter(setting_key="app_version_android").first()
+        ios = AppSettings.objects.filter(setting_key="app_version_ios").first()
+        urls = AppSettings.objects.filter(setting_key="app_store_urls").first()
+
+        return Response({
+            "success": True,
+            "data": {
+                "android": android.setting_value if android else {"version": "1.0.0"},
+                "ios": ios.setting_value if ios else {"version": "1.0.0"},
+                "urls": urls.setting_value if urls else {"playStoreUrl": "", "appStoreUrl": ""}
+            }
+        })
+
+    @extend_schema(
+        summary="Update app versions (Admin)",
+        request=inline_serializer(
+            name="AdminAppVersionPutRequest",
+            fields={
+                "android": serializers.CharField(required=False),
+                "ios": serializers.CharField(required=False),
+                "playStoreUrl": serializers.CharField(required=False, allow_blank=True),
+                "appStoreUrl": serializers.CharField(required=False, allow_blank=True)
+            }
+        )
+    )
+    def put(self, request):
+        data = request.data
+        
+        if 'android' in data:
+            android_setting, _ = AppSettings.objects.get_or_create(setting_key="app_version_android", defaults={"setting_value": {}})
+            android_setting.setting_value = {"version": data['android']}
+            android_setting.save()
+
+        if 'ios' in data:
+            ios_setting, _ = AppSettings.objects.get_or_create(setting_key="app_version_ios", defaults={"setting_value": {}})
+            ios_setting.setting_value = {"version": data['ios']}
+            ios_setting.save()
+
+        if 'playStoreUrl' in data or 'appStoreUrl' in data:
+            urls_setting, _ = AppSettings.objects.get_or_create(setting_key="app_store_urls", defaults={"setting_value": {}})
+            current_urls = urls_setting.setting_value
+            if 'playStoreUrl' in data:
+                current_urls['playStoreUrl'] = data['playStoreUrl']
+            if 'appStoreUrl' in data:
+                current_urls['appStoreUrl'] = data['appStoreUrl']
+            urls_setting.setting_value = current_urls
+            urls_setting.save()
+            
+        return self.get(request)

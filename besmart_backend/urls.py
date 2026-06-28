@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from admin_api.views import VersionCheckView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,4 +28,5 @@ urlpatterns = [
     path('api/reviews/', include('products.review_urls')),
     path('api/search/analytics/', include('search.urls')),
     path('api/ai/', include('ai_services.urls')),
+    path('api/version-check/', VersionCheckView.as_view(), name='version-check'),
 ]
