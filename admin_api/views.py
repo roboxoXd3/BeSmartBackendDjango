@@ -678,6 +678,7 @@ class VersionCheckView(views.APIView):
     POST /api/version-check/
     """
     permission_classes = [permissions.AllowAny]
+    serializer_class = serializers.Serializer # For spectacular
 
     @extend_schema(
         summary="Check for app update",
@@ -749,6 +750,7 @@ class AdminVersionUpdateView(views.APIView):
     PUT /api/admin/app-version/
     """
     permission_classes = [IsAdminUser]
+    serializer_class = serializers.Serializer # For spectacular
 
     @extend_schema(
         summary="Get current app versions (Admin)",
