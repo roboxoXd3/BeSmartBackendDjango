@@ -160,3 +160,45 @@ Send the image via `multipart/form-data` to the backend. The backend handles sec
       "image_url": "https://..."
     }
     ```
+
+---
+
+## 6. Authentication (Native Django JWT)
+
+### Previously (Supabase SDK)
+The frontend used `supabase.auth.signInWithPassword`, `signUp`, and `signOut` which returned a Supabase session containing an `access_token` and `refresh_token` wrapped in a `session` object.
+
+### New Django Endpoints
+The authentication endpoints have been rewritten to use native Django and SimpleJWT, completely removing the Supabase proxy layer. The URLs remain exactly the same to minimize disruption, but the JSON response format has been flattened.
+
+#### Login & Registration
+- **Login:** `POST /api/users/login/`
+- **Register:** `POST /api/users/register/`
+- **Vendor Login:** `POST /api/users/vendor-login/`
+- **Admin Login:** `POST /api/users/admin-login/`
+
+**New Response Format:**
+```json
+{
+  "message": "Login successful.",
+  "user": {
+    "id": "<user_uuid>",
+    "email": "user@example.com"
+  },
+  "access_token": "eyJhbGciOiJIUz...",
+  "refresh_token": "eyJhbGciOiJIUz..."
+}
+```
+*(Notice that `access_token` and `refresh_token` are now at the root level instead of inside a `session` object).*
+
+#### Token Refresh
+- **Refresh Token:** `POST /api/users/token/refresh/`
+  - **Payload:** `{"refresh": "<refresh_token>"}`
+  - **Response:**
+    ```json
+    {
+      "access": "eyJhbGciOiJIUz...",
+      "refresh": "eyJhbGciOiJIUz..."
+    }
+    ```
+*(Note: SimpleJWT uses the keys `access` and `refresh` for the token refresh response).*
