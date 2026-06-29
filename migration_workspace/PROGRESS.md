@@ -11,7 +11,7 @@
 |---|---|---|
 | Phase 1: API Discovery | ✅ COMPLETE | 100% |
 | Phase 2: Verification | ✅ COMPLETE | 100% |
-| Phase 3: Migration | 🏃 IN PROGRESS | 34% |
+| Phase 3: Migration | ✅ COMPLETE | 100% |
 | Phase 4: Testing | ⬜ NOT STARTED | 0% |
 | Phase 5: Frontend Coord | ⬜ NOT STARTED | 0% |
 
@@ -44,12 +44,24 @@
 
 | Category | Count | Status |
 |---|---|---|
-| Supabase SDK calls needing Django endpoints | 34 | Not started |
-| Supabase Auth calls needing Django proxy | 12 | Not started |
-| Supabase Storage calls needing Django proxy | 4 | Not started |
-| Django API calls to verify | 94 | Not started |
-| Unknown calls to resolve | 3 | Not started |
+| Supabase SDK calls needing Django endpoints | 34 | ✅ Done |
+| Supabase Auth calls needing Django proxy | 12 | ✅ Done |
+| Supabase Storage calls needing Django proxy | 4 | ✅ Done |
+| Django API calls to verify | 94 | ✅ Done |
+| Unknown calls to resolve | 3 | ✅ Done |
 | **Total items** | **147** | |
+
+### Phase 3: Migration (100% Complete)
+
+| Batch | Description | Status | Note |
+|---|---|---|---|
+| **Batch 1** | Supabase Auth (Users app) | ✅ Done | Replaced Supabase Auth with SimpleJWT and custom views. |
+| **Batch 2** | Supabase Storage (Users app) | ✅ Done | Replaced Supabase Storage with local static storage in views/serializers. |
+| **Batch 3** | E-commerce / Public APIs | ✅ Done | Implemented all `WEB-S-*` mappings (Categories, Products, Users). |
+| **Batch 4** | Vendor APIs (Part 1) | ✅ Done | Migrated `VND-S-*` for Vendor Profile and Vendor Reviews. |
+| **Batch 5** | Vendor APIs (Part 2) | ✅ Done | Migrated `VND-S-*` for Own Products, Vendor Orders, and Subscriptions. |
+| **Batch 6** | Admin APIs (Part 1) | ✅ Done | Migrated `ADM-S-*` for Auth, Roles, Categories, Settings, Banners. |
+| **Batch 7** | Admin APIs (Part 2) / Cleanup | ✅ Done | Migrated `ADM-S-*` for Loyalty, Audit. Final SDK removal check. |
 
 ---
 

@@ -704,10 +704,44 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         product.save()
         return Response({"message": "Image uploaded", "images": file_url})
 
-    @extend_schema(summary="Bulk upload products")
-    @action(detail=False, methods=['post'], url_path='bulk-upload', parser_classes=[MultiPartParser, FormParser])
+    @extend_schema(
+        summary="Bulk upsert products",
+        request=inline_serializer(name="BulkUpsertReq", fields={"products": serializers.ListField(child=serializers.DictField())}),
+        responses={200: inline_serializer(name="BulkUpsertRes", fields={"message": serializers.CharField(), "updated_count": serializers.IntegerField(), "created_count": serializers.IntegerField()})}
+    )
+    @action(detail=False, methods=['post'], url_path='bulk-upload')
     def bulk_upload(self, request):
-        return Response({'message': 'Bulk upload logic pending'}, status=status.HTTP_501_NOT_IMPLEMENTED)
+        vendor = get_object_or_404(Vendor, user=self.request.user)
+        products_data = request.data.get('products', [])
+        
+        if not products_data:
+            return Response({'error': 'No products provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        updated_count = 0
+        created_count = 0
+        
+        for p_data in products_data:
+            product_id = p_data.get('id')
+            if product_id:
+                try:
+                    product = Product.objects.get(id=product_id, vendor_id=vendor.id)
+                    serializer = ProductDetailSerializer(product, data=p_data, partial=True)
+                    if serializer.is_valid():
+                        serializer.save()
+                        updated_count += 1
+                except Product.DoesNotExist:
+                    pass
+            else:
+                serializer = ProductDetailSerializer(data=p_data)
+                if serializer.is_valid():
+                    serializer.save(vendor_id=vendor.id)
+                    created_count += 1
+                    
+        return Response({
+            'message': 'Bulk upsert completed',
+            'updated_count': updated_count,
+            'created_count': created_count
+        })
 
     @extend_schema(
         summary="Update size chart visibility",

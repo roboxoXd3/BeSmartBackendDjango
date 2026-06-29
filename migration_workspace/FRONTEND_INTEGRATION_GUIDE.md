@@ -202,3 +202,42 @@ The authentication endpoints have been rewritten to use native Django and Simple
     }
     ```
 *(Note: SimpleJWT uses the keys `access` and `refresh` for the token refresh response).*
+
+## 7. Bulk Upload (Vendor Context)
+
+### Previously (Supabase SDK)
+The vendor dashboard uploaded CSVs and processed product creations directly on the frontend using Supabase SDK calls to insert multiple rows into the `products` table.
+
+### New Django Endpoints
+Replace the manual loop of inserts with a single backend endpoint that handles batch creation and partial updates.
+
+- **Bulk Upload:** `POST /api/vendors/own-products/bulk-upload/`
+  - **Payload:** JSON containing a list of products under the `products` key.
+    ```json
+    {
+      "products": [
+        {
+          "name": "Product 1",
+          "description": "Desc 1",
+          "price": 100.0,
+          "stock_quantity": 10,
+          "category_id": "<category_uuid>",
+          "brand": "Brand X"
+        },
+        {
+          "id": "<existing_product_uuid>",
+          "stock_quantity": 50
+        }
+      ]
+    }
+    ```
+  - **Response:**
+    ```json
+    {
+      "message": "Bulk upload processed",
+      "created": 1,
+      "updated": 1
+    }
+    ```
+*(Note: Omitting the `id` field will create a new product, providing an `id` will update the existing product.)*
+
