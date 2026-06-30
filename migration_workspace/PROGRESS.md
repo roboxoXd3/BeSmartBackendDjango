@@ -111,6 +111,14 @@
 
 ## Notes
 
+## Phase 4: Integration Testing & DB Schema Migration (Complete)
+- [x] Dropped PostgreSQL foreign keys referencing old Supabase `auth.users` via `repoint_fks.py`.
+- [x] Applied `--fake` migrations to resolve duplicate table errors.
+- [x] Implemented `run_all_tests.py` test runner.
+- [x] Ran automated verification tests (5/5 passed), confirming 200/201 endpoints and `IntegrityError` resolution.
+
+## Phase 5: Documentation & Handoff (Pending)
+
 - Phase 1 counts are based on source code analysis and may need minor adjustment during verification.
 - Some APIs appear in multiple frontends and map to the same Django endpoint.
 - "BFF Routes" are Next.js API routes that act as intermediaries — they contain the actual Supabase calls.
