@@ -3,7 +3,7 @@ from .models import Category, Subcategory
 
 
 class SubcategorySerializer(serializers.ModelSerializer):
-    category_id = serializers.UUIDField(source='category.id', read_only=True)
+    category_id = serializers.UUIDField(source='category_id', read_only=True)
 
     class Meta:
         model = Subcategory

@@ -39,19 +39,23 @@ class CategorySubcategoriesView(generics.ListAPIView):
 class CategoryProductsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = ProductListSerializer
+    from products.pagination import ProductCursorPagination
+    pagination_class = ProductCursorPagination
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Product.objects.none()
         get_object_or_404(Category, id=self.kwargs['id'], is_active=True)
-        return Product.objects.filter(category_id=self.kwargs['id'], status='active', approval_status='approved')
+        qs = Product.objects.filter(category_id=self.kwargs['id'], status='active', approval_status='approved')
+        from products.views import get_optimized_product_queryset
+        return get_optimized_product_queryset(qs)
 
     @extend_schema(summary="List products in category")
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
 class CategoryListView(generics.ListAPIView):
-    queryset = Category.objects.filter(is_active=True)
+    queryset = Category.objects.filter(is_active=True).prefetch_related('subcategories')
     serializer_class = CategorySerializer
     permission_classes = [permissions.AllowAny]
     pagination_class = None
