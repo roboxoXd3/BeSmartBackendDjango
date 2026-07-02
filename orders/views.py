@@ -257,7 +257,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
-        return Order.objects.filter(user=self.request.user)
+        return Order.objects.filter(user=self.request.user).prefetch_related('items', 'items__product')
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):

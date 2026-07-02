@@ -57,6 +57,26 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = ['id', 'products', 'quantity', 'price', 'selected_size', 'selected_color']
 
+class OrderListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        iterable = data.all() if hasattr(data, 'all') else data
+        address_ids = {order.address_id for order in iterable if order.address_id}
+        pm_ids = {order.payment_method_id for order in iterable if order.payment_method_id}
+        
+        if address_ids:
+            self.context['prefetched_addresses'] = {
+                a.id: ShippingAddressSerializer(a).data 
+                for a in ShippingAddress.objects.filter(id__in=address_ids)
+            }
+        
+        if pm_ids:
+            self.context['prefetched_payment_methods'] = {
+                p.id: PaymentMethodSerializer(p).data 
+                for p in PaymentMethod.objects.filter(id__in=pm_ids)
+            }
+            
+        return super().to_representation(data)
+
 class OrderSerializer(serializers.ModelSerializer):
     order_items = OrderItemSerializer(source='items', many=True, read_only=True)
     shipping_address = serializers.SerializerMethodField()
@@ -64,28 +84,35 @@ class OrderSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Order
+        list_serializer_class = OrderListSerializer
         fields = '__all__'
         read_only_fields = ['user', 'order_number', 'created_at', 'updated_at', 'status']
 
     @extend_schema_field(ShippingAddressSerializer)
     def get_shipping_address(self, obj):
-        if obj.address_id:
-            try:
-                addr = ShippingAddress.objects.get(id=obj.address_id)
-                return ShippingAddressSerializer(addr).data
-            except ShippingAddress.DoesNotExist:
-                return None
-        return None
+        if not obj.address_id:
+            return None
+        prefetched = self.context.get('prefetched_addresses')
+        if prefetched is not None:
+            return prefetched.get(obj.address_id)
+        try:
+            addr = ShippingAddress.objects.get(id=obj.address_id)
+            return ShippingAddressSerializer(addr).data
+        except ShippingAddress.DoesNotExist:
+            return None
 
     @extend_schema_field(PaymentMethodSerializer)
     def get_payment_method(self, obj):
-        if obj.payment_method_id:
-            try:
-                pm = PaymentMethod.objects.get(id=obj.payment_method_id)
-                return PaymentMethodSerializer(pm).data
-            except PaymentMethod.DoesNotExist:
-                return None
-        return None
+        if not obj.payment_method_id:
+            return None
+        prefetched = self.context.get('prefetched_payment_methods')
+        if prefetched is not None:
+            return prefetched.get(obj.payment_method_id)
+        try:
+            pm = PaymentMethod.objects.get(id=obj.payment_method_id)
+            return PaymentMethodSerializer(pm).data
+        except PaymentMethod.DoesNotExist:
+            return None
 
 class OrderItemInputSerializer(serializers.Serializer):
     """For direct item-list order creation (Gap 27: cart mismatch)."""
