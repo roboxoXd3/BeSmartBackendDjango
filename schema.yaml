@@ -160,6 +160,279 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/admin/app-version/:
+    get:
+      operationId: admin_app_version_retrieve
+      description: |-
+        Internal API for the admin to manage app versions.
+        GET /api/admin/app-version/
+        PUT /api/admin/app-version/
+      summary: Get current app versions (Admin)
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAppVersionGetResponse'
+          description: ''
+    put:
+      operationId: admin_app_version_update
+      description: |-
+        Internal API for the admin to manage app versions.
+        GET /api/admin/app-version/
+        PUT /api/admin/app-version/
+      summary: Update app versions (Admin)
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAppVersionPutRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminAppVersionPutRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminAppVersionPutRequestRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/admin/categories/:
+    get:
+      operationId: admin_categories_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoryAdminList'
+          description: ''
+    post:
+      operationId: admin_categories_create
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryAdminRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryAdmin'
+          description: ''
+  /api/admin/categories/{id}/:
+    get:
+      operationId: admin_categories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryAdmin'
+          description: ''
+    put:
+      operationId: admin_categories_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryAdminRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryAdmin'
+          description: ''
+    patch:
+      operationId: admin_categories_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryAdminRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryAdmin'
+          description: ''
+    delete:
+      operationId: admin_categories_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this category.
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/admin/content/banners/{id}/images/:
+    post:
+      operationId: admin_content_banners_images_create
+      description: POST /api/admin/content/banners/{id}/images/ and DELETE /api/admin/content/banners/{id}/images/
+      summary: Upload banner background image (Admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminBannerImageUploadReqRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminBannerImageUploadReqRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminBannerImageUploadReqRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBannerImageUploadResp'
+          description: ''
+    delete:
+      operationId: admin_content_banners_images_destroy
+      description: POST /api/admin/content/banners/{id}/images/ and DELETE /api/admin/content/banners/{id}/images/
+      summary: Remove banner background image (Admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminBannerImageDeleteResp'
+          description: ''
   /api/admin/dashboard/recent-activity/:
     get:
       operationId: admin_dashboard_recent_activity_retrieve
@@ -399,7 +672,7 @@ paths:
   /api/admin/loyalty/{id}/points/:
     post:
       operationId: admin_loyalty_points_create
-      summary: Add loyalty points to user
+      summary: Add/Deduct loyalty points for a user
       parameters:
       - in: path
         name: id
@@ -436,12 +709,69 @@ paths:
     get:
       operationId: admin_orders_list
       parameters:
+      - in: query
+        name: dateFrom
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: dateTo
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: maxAmount
+        schema:
+          type: number
+      - in: query
+        name: minAmount
+        schema:
+          type: number
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - name: page
         required: false
         in: query
         description: A page number within the paginated result set.
         schema:
           type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - cancelled
+          - confirmed
+          - delivered
+          - pending
+          - processing
+          - refunded
+          - returned
+          - shipped
+        description: |-
+          * `pending` - Pending
+          * `confirmed` - Confirmed
+          * `processing` - Processing
+          * `shipped` - Shipped
+          * `delivered` - Delivered
+          * `cancelled` - Cancelled
+          * `refunded` - Refunded
+          * `returned` - Returned
+      - in: query
+        name: vendorId
+        schema:
+          type: string
+          format: uuid
       tags:
       - admin
       security:
@@ -452,7 +782,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedOrderList'
+                $ref: '#/components/schemas/PaginatedOrderAdminList'
           description: ''
     post:
       operationId: admin_orders_create
@@ -462,13 +792,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/OrderAdminRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/OrderAdminRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/OrderAdminRequest'
         required: true
       security:
       - bearerAuth: []
@@ -478,7 +808,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                $ref: '#/components/schemas/OrderAdmin'
           description: ''
   /api/admin/orders/{id}/:
     get:
@@ -501,7 +831,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                $ref: '#/components/schemas/OrderAdmin'
           description: ''
     put:
       operationId: admin_orders_update
@@ -519,13 +849,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/OrderAdminRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/OrderAdminRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/OrderRequest'
+              $ref: '#/components/schemas/OrderAdminRequest'
         required: true
       security:
       - bearerAuth: []
@@ -535,7 +865,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                $ref: '#/components/schemas/OrderAdmin'
           description: ''
     patch:
       operationId: admin_orders_partial_update
@@ -553,13 +883,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedOrderRequest'
+              $ref: '#/components/schemas/PatchedOrderAdminRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedOrderRequest'
+              $ref: '#/components/schemas/PatchedOrderAdminRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedOrderRequest'
+              $ref: '#/components/schemas/PatchedOrderAdminRequest'
       security:
       - bearerAuth: []
       - cookieAuth: []
@@ -568,7 +898,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Order'
+                $ref: '#/components/schemas/OrderAdmin'
           description: ''
     delete:
       operationId: admin_orders_destroy
@@ -818,12 +1148,42 @@ paths:
     get:
       operationId: admin_products_list
       parameters:
+      - in: query
+        name: approval_status
+        schema:
+          type: string
+      - in: query
+        name: category
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
       - name: page
         required: false
         in: query
         description: A page number within the paginated result set.
         schema:
           type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: vendor
+        schema:
+          type: string
+          format: uuid
       tags:
       - admin
       security:
@@ -861,6 +1221,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductDetail'
+          description: ''
+  /api/admin/products/{id}/images/:
+    post:
+      operationId: admin_products_images_create
+      description: POST /api/admin/products/{id}/images/ and DELETE /api/admin/products/{id}/images/
+      summary: Upload product image (Admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminProductImageUploadReqRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminProductImageUploadReqRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminProductImageUploadReqRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductImageUploadResp'
+          description: ''
+    delete:
+      operationId: admin_products_images_destroy
+      description: POST /api/admin/products/{id}/images/ and DELETE /api/admin/products/{id}/images/
+      summary: Remove product image (Admin)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductImageDeleteResp'
           description: ''
   /api/admin/products/{id}/:
     get:
@@ -970,6 +1389,144 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/admin/products/{id}/approve/:
+    post:
+      operationId: admin_products_approve_create
+      summary: Approve a product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this product.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductApproveRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductApproveRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductApproveRequestRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductStatusAdminResponse'
+          description: ''
+    patch:
+      operationId: admin_products_approve_partial_update
+      summary: Approve a product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this product.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductApproveRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductApproveRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductApproveRequestRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductStatusAdminResponse'
+          description: ''
+  /api/admin/products/{id}/reject/:
+    post:
+      operationId: admin_products_reject_create
+      summary: Reject a product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this product.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRejectRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRejectRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRejectRequestRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductStatusAdminResponse'
+          description: ''
+    patch:
+      operationId: admin_products_reject_partial_update
+      summary: Reject a product
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this product.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRejectRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRejectRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRejectRequestRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductStatusAdminResponse'
+          description: ''
   /api/admin/products/{id}/status/:
     patch:
       operationId: admin_products_status_partial_update
@@ -1021,6 +1578,178 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductDetail'
           description: ''
+  /api/admin/sessions/:
+    get:
+      operationId: admin_sessions_list
+      description: |-
+        Internal API for the Next.js admin BFF to manage admin sessions.
+        Lookup field is session_token.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminSessionList'
+          description: ''
+    post:
+      operationId: admin_sessions_create
+      description: |-
+        Internal API for the Next.js admin BFF to manage admin sessions.
+        Lookup field is session_token.
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+          description: ''
+  /api/admin/sessions/{session_token}/:
+    get:
+      operationId: admin_sessions_retrieve
+      description: |-
+        Internal API for the Next.js admin BFF to manage admin sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+          description: ''
+    put:
+      operationId: admin_sessions_update
+      description: |-
+        Internal API for the Next.js admin BFF to manage admin sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminSessionRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+          description: ''
+    patch:
+      operationId: admin_sessions_partial_update
+      description: |-
+        Internal API for the Next.js admin BFF to manage admin sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSessionRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+          description: ''
+    delete:
+      operationId: admin_sessions_destroy
+      description: |-
+        Internal API for the Next.js admin BFF to manage admin sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/admin/settings/:
     get:
       operationId: admin_settings_list
@@ -1177,6 +1906,179 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/admin/subcategories/:
+    get:
+      operationId: admin_subcategories_list
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+          format: uuid
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSubcategoryAdminList'
+          description: ''
+    post:
+      operationId: admin_subcategories_create
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubcategoryAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubcategoryAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubcategoryAdminRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcategoryAdmin'
+          description: ''
+  /api/admin/subcategories/{id}/:
+    get:
+      operationId: admin_subcategories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subcategory.
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcategoryAdmin'
+          description: ''
+    put:
+      operationId: admin_subcategories_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subcategory.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubcategoryAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SubcategoryAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SubcategoryAdminRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcategoryAdmin'
+          description: ''
+    patch:
+      operationId: admin_subcategories_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subcategory.
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcategoryAdminRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcategoryAdminRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSubcategoryAdminRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubcategoryAdmin'
+          description: ''
+    delete:
+      operationId: admin_subcategories_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this subcategory.
+        required: true
+      tags:
+      - admin
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/admin/transactions/:
     get:
       operationId: admin_transactions_list
@@ -1252,13 +2154,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserManagementRequest'
+              $ref: '#/components/schemas/UserAdminCreateUpdateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/UserManagementRequest'
+              $ref: '#/components/schemas/UserAdminCreateUpdateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/UserManagementRequest'
+              $ref: '#/components/schemas/UserAdminCreateUpdateRequest'
+        required: true
       security:
       - bearerAuth: []
       - cookieAuth: []
@@ -1267,7 +2170,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserManagement'
+                $ref: '#/components/schemas/UserAdminCreateUpdate'
           description: ''
   /api/admin/users/{id}/:
     get:
@@ -1308,13 +2211,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserManagementRequest'
+              $ref: '#/components/schemas/UserAdminCreateUpdateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/UserManagementRequest'
+              $ref: '#/components/schemas/UserAdminCreateUpdateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/UserManagementRequest'
+              $ref: '#/components/schemas/UserAdminCreateUpdateRequest'
+        required: true
       security:
       - bearerAuth: []
       - cookieAuth: []
@@ -1323,7 +2227,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserManagement'
+                $ref: '#/components/schemas/UserAdminCreateUpdate'
           description: ''
     patch:
       operationId: admin_users_partial_update
@@ -1341,13 +2245,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedUserManagementRequest'
+              $ref: '#/components/schemas/PatchedUserAdminCreateUpdateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedUserManagementRequest'
+              $ref: '#/components/schemas/PatchedUserAdminCreateUpdateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedUserManagementRequest'
+              $ref: '#/components/schemas/PatchedUserAdminCreateUpdateRequest'
       security:
       - bearerAuth: []
       - cookieAuth: []
@@ -1356,7 +2260,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserManagement'
+                $ref: '#/components/schemas/UserAdminCreateUpdate'
           description: ''
     delete:
       operationId: admin_users_destroy
@@ -3203,6 +4107,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/LoyaltyPoints'
           description: ''
+    post:
+      operationId: loyalty_points_create
+      description: Stub for frontend calling POST /api/loyalty/points/ to award points
+        after checkout.
+      tags:
+      - loyalty
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/loyalty/redeem/:
     post:
       operationId: loyalty_redeem_create
@@ -3309,23 +4225,12 @@ paths:
                 type: array
           description: ''
   /api/loyalty/validate-voucher/:
-    post:
-      operationId: loyalty_validate_voucher_create
+    get:
+      operationId: loyalty_validate_voucher_retrieve
       description: POST /api/loyalty/validate-voucher/
       summary: Validate Voucher
       tags:
       - loyalty
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ValidateVoucherReqRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ValidateVoucherReqRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ValidateVoucherReqRequest'
       security:
       - bearerAuth: []
       - cookieAuth: []
@@ -3336,6 +4241,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/ValidateVoucherRes'
           description: ''
+    post:
+      operationId: loyalty_validate_voucher_create
+      description: POST /api/loyalty/validate-voucher/
+      tags:
+      - loyalty
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/loyalty/vouchers/:
     get:
       operationId: loyalty_vouchers_list
@@ -4492,13 +5408,10 @@ paths:
       - products
       requestBody:
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductColorImageUploadReqRequest'
           application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProductColorImageUploadReqRequest'
-          multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductColorImageUploadReqRequest'
         required: true
@@ -4528,13 +5441,10 @@ paths:
       - products
       requestBody:
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductVideoUploadReqRequest'
           application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ProductVideoUploadReqRequest'
-          multipart/form-data:
             schema:
               $ref: '#/components/schemas/ProductVideoUploadReqRequest'
         required: true
@@ -4632,13 +5542,6 @@ paths:
   /api/products/on-sale/:
     get:
       operationId: products_on_sale_list
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       tags:
       - products
       security:
@@ -4650,7 +5553,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedProductListList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductList'
           description: ''
   /api/products/search/:
     get:
@@ -7647,6 +8552,178 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedVendorListList'
           description: ''
+  /api/vendors/sessions/:
+    get:
+      operationId: vendors_sessions_list
+      description: |-
+        Internal API for the Next.js vendor BFF to manage vendor sessions.
+        Lookup field is session_token.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - vendors
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVendorSessionList'
+          description: ''
+    post:
+      operationId: vendors_sessions_create
+      description: |-
+        Internal API for the Next.js vendor BFF to manage vendor sessions.
+        Lookup field is session_token.
+      tags:
+      - vendors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VendorSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VendorSessionRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSession'
+          description: ''
+  /api/vendors/sessions/{session_token}/:
+    get:
+      operationId: vendors_sessions_retrieve
+      description: |-
+        Internal API for the Next.js vendor BFF to manage vendor sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - vendors
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSession'
+          description: ''
+    put:
+      operationId: vendors_sessions_update
+      description: |-
+        Internal API for the Next.js vendor BFF to manage vendor sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - vendors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VendorSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VendorSessionRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSession'
+          description: ''
+    patch:
+      operationId: vendors_sessions_partial_update
+      description: |-
+        Internal API for the Next.js vendor BFF to manage vendor sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - vendors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVendorSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVendorSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVendorSessionRequest'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VendorSession'
+          description: ''
+    delete:
+      operationId: vendors_sessions_destroy
+      description: |-
+        Internal API for the Next.js vendor BFF to manage vendor sessions.
+        Lookup field is session_token.
+      parameters:
+      - in: path
+        name: session_token
+        schema:
+          type: string
+        required: true
+      tags:
+      - vendors
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/vendors/size-charts/:
     get:
       operationId: vendors_size_charts_list
@@ -7939,6 +9016,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/VendorTransactionDummy'
           description: ''
+  /api/version-check/:
+    post:
+      operationId: version_check_create
+      description: |-
+        Public API for the mobile app to check if an update is available.
+        POST /api/version-check/
+      summary: Check for app update
+      tags:
+      - version-check
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionCheckRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionCheckRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionCheckRequestRequest'
+        required: true
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionCheckResponse'
+          description: ''
   /api/wishlist/:
     get:
       operationId: wishlist_list
@@ -8195,6 +9304,70 @@ components:
       - created_at
       - id
       - resource_type
+    AdminAppVersionData:
+      type: object
+      properties:
+        android:
+          type: object
+          additionalProperties: {}
+        ios:
+          type: object
+          additionalProperties: {}
+        urls:
+          type: object
+          additionalProperties: {}
+      required:
+      - android
+      - ios
+      - urls
+    AdminAppVersionGetResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/AdminAppVersionData'
+      required:
+      - data
+      - success
+    AdminAppVersionPutRequestRequest:
+      type: object
+      properties:
+        android:
+          type: string
+          minLength: 1
+        ios:
+          type: string
+          minLength: 1
+        playStoreUrl:
+          type: string
+        appStoreUrl:
+          type: string
+    AdminBannerImageDeleteResp:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
+    AdminBannerImageUploadReqRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
+    AdminBannerImageUploadResp:
+      type: object
+      properties:
+        status:
+          type: string
+        image_url:
+          type: string
+      required:
+      - image_url
+      - status
     AdminLoginResponse:
       type: object
       properties:
@@ -8210,6 +9383,31 @@ components:
       - message
       - session
       - user
+    AdminProductImageDeleteResp:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+      - status
+    AdminProductImageUploadReqRequest:
+      type: object
+      properties:
+        image:
+          type: string
+          format: binary
+      required:
+      - image
+    AdminProductImageUploadResp:
+      type: object
+      properties:
+        status:
+          type: string
+        image_url:
+          type: string
+      required:
+      - image_url
+      - status
     AdminRecentActivityResponse:
       type: object
       properties:
@@ -8239,30 +9437,139 @@ components:
       required:
       - period
       - trend
-    AdminStatsResponse:
+    AdminSession:
       type: object
       properties:
-        total_users:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        admin_user:
+          allOf:
+          - $ref: '#/components/schemas/AdminUser'
+          readOnly: true
+        session_token:
+          type: string
+          maxLength: 255
+        refresh_token:
+          type: string
+          maxLength: 255
+        expires_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+        device_info: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        admin:
+          type: string
+          format: uuid
+          nullable: true
+        user:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - admin_user
+      - created_at
+      - expires_at
+      - id
+      - refresh_token
+      - session_token
+      - updated_at
+    AdminSessionRequest:
+      type: object
+      properties:
+        session_token:
+          type: string
+          minLength: 1
+          maxLength: 255
+        refresh_token:
+          type: string
+          minLength: 1
+          maxLength: 255
+        expires_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+        device_info: {}
+        admin:
+          type: string
+          format: uuid
+          nullable: true
+        user:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - expires_at
+      - refresh_token
+      - session_token
+    AdminStatsData:
+      type: object
+      properties:
+        totalUsers:
           type: integer
-        total_vendors:
+        totalVendors:
           type: integer
-        total_orders:
+        totalOrders:
           type: integer
-        pending_vendors:
+        totalProducts:
           type: integer
-        total_revenue:
+        pendingVendors:
+          type: integer
+        totalRevenue:
           type: number
           format: double
-        pending_payouts:
+        avgOrderValue:
+          type: number
+          format: double
+        pendingPayouts:
+          type: number
+          format: double
+        ordersChange:
+          type: number
+          format: double
+        vendorsChange:
+          type: number
+          format: double
+        revenueChange:
+          type: number
+          format: double
+        avgOrderValueChange:
           type: number
           format: double
       required:
-      - pending_payouts
-      - pending_vendors
-      - total_orders
-      - total_revenue
-      - total_users
-      - total_vendors
+      - avgOrderValue
+      - avgOrderValueChange
+      - ordersChange
+      - pendingPayouts
+      - pendingVendors
+      - revenueChange
+      - totalOrders
+      - totalProducts
+      - totalRevenue
+      - totalUsers
+      - totalVendors
+      - vendorsChange
+    AdminStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/AdminStatsData'
+      required:
+      - data
+      - success
     AdminUser:
       type: object
       properties:
@@ -8528,15 +9835,15 @@ components:
           minimum: -2147483648
         selected_size:
           type: string
+          nullable: true
           maxLength: 50
         selected_color:
           type: string
+          nullable: true
           maxLength: 50
       required:
       - id
       - product
-      - selected_color
-      - selected_size
     CartItemRequest:
       type: object
       properties:
@@ -8550,16 +9857,14 @@ components:
           minimum: -2147483648
         selected_size:
           type: string
-          minLength: 1
+          nullable: true
           maxLength: 50
         selected_color:
           type: string
-          minLength: 1
+          nullable: true
           maxLength: 50
       required:
       - product_id
-      - selected_color
-      - selected_size
     Category:
       type: object
       properties:
@@ -8604,6 +9909,68 @@ components:
       - name
       - subcategories
       - updated_at
+    CategoryAdmin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        requires_size_chart:
+          type: boolean
+        default_size_chart_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        size_chart_applicability:
+          $ref: '#/components/schemas/SizeChartApplicabilityEnum'
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    CategoryAdminRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        requires_size_chart:
+          type: boolean
+        default_size_chart_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        size_chart_applicability:
+          $ref: '#/components/schemas/SizeChartApplicabilityEnum'
+      required:
+      - name
     CategoryHasSizeChartRes:
       type: object
       properties:
@@ -9221,6 +10588,8 @@ components:
       properties:
         points:
           type: integer
+        description:
+          type: string
       required:
       - points
     LoyaltyPointsAdminResponse:
@@ -9228,18 +10597,23 @@ components:
       properties:
         message:
           type: string
-        loyalty_points_earned:
+        points_balance:
           type: integer
         user:
           type: string
       required:
       - message
+      - points_balance
+      - user
     LoyaltyReward:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          readOnly: true
+        can_redeem_more:
+          type: boolean
           readOnly: true
         name:
           type: string
@@ -9290,6 +10664,7 @@ components:
           format: date-time
           readOnly: true
       required:
+      - can_redeem_more
       - created_at
       - id
       - name
@@ -9368,6 +10743,9 @@ components:
           minimum: -2147483648
         discount_type:
           type: string
+        reward_type:
+          type: string
+          readOnly: true
         discount_value:
           type: string
           format: decimal
@@ -9410,6 +10788,7 @@ components:
       - redeemed_at
       - reward_id
       - reward_name
+      - reward_type
       - user_id
       - voucher_code
     LoyaltyVoucherStatusEnum:
@@ -9465,10 +10844,18 @@ components:
           type: string
           format: uuid
           readOnly: true
-        items:
+        order_items:
           type: array
           items:
             $ref: '#/components/schemas/OrderItem'
+          readOnly: true
+        shipping_address:
+          allOf:
+          - $ref: '#/components/schemas/ShippingAddress'
+          readOnly: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethod'
           readOnly: true
         address_id:
           type: string
@@ -9492,7 +10879,7 @@ components:
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
         status:
           allOf:
-          - $ref: '#/components/schemas/OrderStatusEnum'
+          - $ref: '#/components/schemas/StatusB49Enum'
           readOnly: true
         created_at:
           type: string
@@ -9578,119 +10965,163 @@ components:
       required:
       - created_at
       - id
-      - items
+      - order_items
       - order_number
+      - payment_method
+      - shipping_address
       - shipping_fee
       - status
       - subtotal
       - total
       - updated_at
       - user
-    OrderItem:
+    OrderAdmin:
       type: object
       properties:
         id:
           type: string
           format: uuid
           readOnly: true
-        product:
-          allOf:
-          - $ref: '#/components/schemas/ProductList'
+        order_items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
           readOnly: true
-        quantity:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-        price:
+        shipping_address:
+          allOf:
+          - $ref: '#/components/schemas/ShippingAddress'
+          readOnly: true
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethod'
+          readOnly: true
+        customer:
+          type: string
+          readOnly: true
+        vendors:
+          type: string
+          readOnly: true
+        address_id:
+          type: string
+          format: uuid
+          nullable: true
+        payment_method_id:
+          type: string
+          format: uuid
+          nullable: true
+        subtotal:
           type: string
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-        selected_size:
+        shipping_fee:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusB49Enum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        order_number:
+          type: string
+          readOnly: true
+          nullable: true
+        vendor_id:
+          type: string
+          format: uuid
+          nullable: true
+        shipping_method:
+          type: string
+          nullable: true
+          maxLength: 100
+        tracking_number:
+          type: string
+          nullable: true
+          maxLength: 100
+        tracking_url:
+          type: string
+          nullable: true
+        estimated_delivery:
+          type: string
+          format: date-time
+          nullable: true
+        discount_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        tax_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        notes:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        squad_transaction_ref:
+          type: string
+          nullable: true
+          maxLength: 255
+        squad_gateway_ref:
+          type: string
+          nullable: true
+          maxLength: 255
+        payment_status:
           type: string
           maxLength: 50
-        selected_color:
+        loyalty_points_earned:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        loyalty_voucher_code:
+          type: string
+          nullable: true
+        loyalty_discount_applied:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        escrow_status:
           type: string
           maxLength: 50
+        escrow_release_date:
+          type: string
+          format: date-time
+          nullable: true
+        vendor_payout_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        user:
+          type: string
+          format: uuid
+          readOnly: true
       required:
+      - created_at
+      - customer
       - id
-      - price
-      - product
-      - quantity
-      - selected_color
-      - selected_size
-    OrderItemInput:
-      type: object
-      description: 'For direct item-list order creation (Gap 27: cart mismatch).'
-      properties:
-        product_id:
-          type: string
-          format: uuid
-        quantity:
-          type: integer
-          minimum: 1
-          default: 1
-        selected_size:
-          type: string
-          default: ''
-        selected_color:
-          type: string
-          default: ''
-      required:
-      - product_id
-    OrderItemInputRequest:
-      type: object
-      description: 'For direct item-list order creation (Gap 27: cart mismatch).'
-      properties:
-        product_id:
-          type: string
-          format: uuid
-        quantity:
-          type: integer
-          minimum: 1
-          default: 1
-        selected_size:
-          type: string
-          default: ''
-        selected_color:
-          type: string
-          default: ''
-      required:
-      - product_id
-    OrderItemRequest:
-      type: object
-      properties:
-        quantity:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-        price:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-        selected_size:
-          type: string
-          minLength: 1
-          maxLength: 50
-        selected_color:
-          type: string
-          minLength: 1
-          maxLength: 50
-      required:
-      - price
-      - quantity
-      - selected_color
-      - selected_size
-    OrderPaymentStatusRes:
-      type: object
-      properties:
-        success:
-          type: boolean
-        order:
-          $ref: '#/components/schemas/Order'
-      required:
-      - order
-      - success
-    OrderRequest:
+      - order_items
+      - order_number
+      - payment_method
+      - shipping_address
+      - shipping_fee
+      - status
+      - subtotal
+      - total
+      - updated_at
+      - user
+      - vendors
+    OrderAdminRequest:
       type: object
       properties:
         address_id:
@@ -9784,6 +11215,108 @@ components:
       - shipping_fee
       - subtotal
       - total
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        products:
+          allOf:
+          - $ref: '#/components/schemas/ProductList'
+          readOnly: true
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        selected_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        selected_color:
+          type: string
+          nullable: true
+          maxLength: 50
+      required:
+      - id
+      - price
+      - products
+      - quantity
+    OrderItemInput:
+      type: object
+      description: 'For direct item-list order creation (Gap 27: cart mismatch).'
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        selected_size:
+          type: string
+          default: ''
+        selected_color:
+          type: string
+          default: ''
+      required:
+      - product_id
+    OrderItemInputRequest:
+      type: object
+      description: 'For direct item-list order creation (Gap 27: cart mismatch).'
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+        selected_size:
+          type: string
+          default: ''
+        selected_color:
+          type: string
+          default: ''
+      required:
+      - product_id
+    OrderItemRequest:
+      type: object
+      properties:
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        selected_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        selected_color:
+          type: string
+          nullable: true
+          maxLength: 50
+      required:
+      - price
+      - quantity
+    OrderPaymentStatusRes:
+      type: object
+      properties:
+        success:
+          type: boolean
+        order:
+          $ref: '#/components/schemas/Order'
+      required:
+      - order
+      - success
     OrderStatusAdminResponse:
       type: object
       properties:
@@ -9794,26 +11327,6 @@ components:
       required:
       - order_status
       - status
-    OrderStatusEnum:
-      enum:
-      - pending
-      - confirmed
-      - processing
-      - shipped
-      - delivered
-      - cancelled
-      - refunded
-      - returned
-      type: string
-      description: |-
-        * `pending` - Pending
-        * `confirmed` - Confirmed
-        * `processing` - Processing
-        * `shipped` - Shipped
-        * `delivered` - Delivered
-        * `cancelled` - Cancelled
-        * `refunded` - Refunded
-        * `returned` - Returned
     OrderStatusUpdateRes:
       type: object
       properties:
@@ -9849,6 +11362,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AdminActionLog'
+    PaginatedAdminSessionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminSession'
     PaginatedAdminUserList:
       type: object
       required:
@@ -9895,6 +11431,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AppSettings'
+    PaginatedCategoryAdminList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryAdmin'
     PaginatedChatConversationList:
       type: object
       required:
@@ -10079,6 +11638,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LoyaltyVoucher'
+    PaginatedOrderAdminList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderAdmin'
     PaginatedOrderList:
       type: object
       required:
@@ -10286,6 +11868,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ShippingAddress'
+    PaginatedSubcategoryAdminList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubcategoryAdmin'
     PaginatedSubcategoryList:
       type: object
       required:
@@ -10562,6 +12167,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/VendorReview'
+    PaginatedVendorSessionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VendorSession'
     PaginatedVendorSizeChartTemplateList:
       type: object
       required:
@@ -10661,6 +12289,31 @@ components:
           type: string
       required:
       - email
+    PatchedAdminSessionRequest:
+      type: object
+      properties:
+        session_token:
+          type: string
+          minLength: 1
+          maxLength: 255
+        refresh_token:
+          type: string
+          minLength: 1
+          maxLength: 255
+        expires_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+        device_info: {}
+        admin:
+          type: string
+          format: uuid
+          nullable: true
+        user:
+          type: string
+          format: uuid
+          nullable: true
     PatchedAdminUserRequest:
       type: object
       properties:
@@ -10721,12 +12374,34 @@ components:
           minimum: -2147483648
         selected_size:
           type: string
-          minLength: 1
+          nullable: true
           maxLength: 50
         selected_color:
           type: string
-          minLength: 1
+          nullable: true
           maxLength: 50
+    PatchedCategoryAdminRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        requires_size_chart:
+          type: boolean
+        default_size_chart_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        size_chart_applicability:
+          $ref: '#/components/schemas/SizeChartApplicabilityEnum'
     PatchedChatConversationRequest:
       type: object
       properties:
@@ -10752,19 +12427,7 @@ components:
         source:
           type: string
           minLength: 1
-    PatchedOrderPaymentStatusReqRequest:
-      type: object
-      properties:
-        payment_status:
-          type: string
-          minLength: 1
-        squad_gateway_ref:
-          type: string
-          minLength: 1
-        escrow_status:
-          type: string
-          minLength: 1
-    PatchedOrderRequest:
+    PatchedOrderAdminRequest:
       type: object
       properties:
         address_id:
@@ -10854,6 +12517,18 @@ components:
           format: decimal
           pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
           nullable: true
+    PatchedOrderPaymentStatusReqRequest:
+      type: object
+      properties:
+        payment_status:
+          type: string
+          minLength: 1
+        squad_gateway_ref:
+          type: string
+          minLength: 1
+        escrow_status:
+          type: string
+          minLength: 1
     PatchedOrderStatusAdminRequestRequest:
       type: object
       properties:
@@ -10962,6 +12637,12 @@ components:
           $ref: '#/components/schemas/PayoutStatusAdminRequestStatusEnum'
         admin_notes:
           type: string
+    PatchedProductApproveRequestRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          minLength: 1
     PatchedProductDetailRequest:
       type: object
       properties:
@@ -11048,9 +12729,6 @@ components:
           minLength: 1
           maxLength: 20
         colors: {}
-        search_vector:
-          type: string
-          nullable: true
         dimensions:
           nullable: true
         shipping_required:
@@ -11077,9 +12755,6 @@ components:
         custom_size_chart_data:
           nullable: true
         size_guide_type:
-          type: string
-          nullable: true
-        embedding:
           type: string
           nullable: true
         subtitle:
@@ -11143,6 +12818,14 @@ components:
           nullable: true
         cod_allowed:
           type: boolean
+    PatchedProductRejectRequestRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          minLength: 1
+        notes:
+          type: string
     PatchedProductStatusAdminRequestRequest:
       type: object
       properties:
@@ -11316,6 +12999,21 @@ components:
       properties:
         visible:
           type: boolean
+    PatchedSubcategoryAdminRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        category:
+          type: string
+          format: uuid
     PatchedSupportInfoRequest:
       type: object
       properties:
@@ -11374,6 +13072,29 @@ components:
       properties:
         stock_quantity:
           type: integer
+    PatchedUserAdminCreateUpdateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: Email address
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
     PatchedUserCurrencyPreferenceRequest:
       type: object
       properties:
@@ -11612,6 +13333,32 @@ components:
           maximum: 2147483647
           minimum: -2147483648
         review_text:
+          type: string
+          nullable: true
+    PatchedVendorSessionRequest:
+      type: object
+      properties:
+        vendor_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        session_token:
+          type: string
+          minLength: 1
+        refresh_token:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+          nullable: true
+        device_info:
+          nullable: true
+        ip_address:
           type: string
           nullable: true
     PatchedVendorSizeChartTemplateRequest:
@@ -12007,6 +13754,14 @@ components:
       required:
       - amount
       - transaction_type
+    PlatformEnum:
+      enum:
+      - android
+      - iOS
+      type: string
+      description: |-
+        * `android` - android
+        * `iOS` - iOS
     PriorityEnum:
       enum:
       - low
@@ -12019,6 +13774,12 @@ components:
         * `normal` - Normal
         * `high` - High
         * `urgent` - Urgent
+    ProductApproveRequestRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          minLength: 1
     ProductColorImageUploadReqRequest:
       type: object
       properties:
@@ -12184,9 +13945,6 @@ components:
           format: date-time
           readOnly: true
           nullable: true
-        search_vector:
-          type: string
-          nullable: true
         dimensions:
           nullable: true
         shipping_required:
@@ -12212,9 +13970,6 @@ components:
         custom_size_chart_data:
           nullable: true
         size_guide_type:
-          type: string
-          nullable: true
-        embedding:
           type: string
           nullable: true
         subtitle:
@@ -12367,9 +14122,6 @@ components:
           minLength: 1
           maxLength: 20
         colors: {}
-        search_vector:
-          type: string
-          nullable: true
         dimensions:
           nullable: true
         shipping_required:
@@ -12396,9 +14148,6 @@ components:
         custom_size_chart_data:
           nullable: true
         size_guide_type:
-          type: string
-          nullable: true
-        embedding:
           type: string
           nullable: true
         subtitle:
@@ -12508,6 +14257,10 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,1}(?:\.\d{0,2})?$
+        ratings:
+          type: number
+          format: double
+          readOnly: true
         reviews:
           type: integer
           maximum: 2147483647
@@ -12548,10 +14301,24 @@ components:
           type: string
           format: uuid
           nullable: true
+        category:
+          type: string
+          readOnly: true
+        sizes:
+          type: array
+          items:
+            type: string
+        base_currency:
+          type: string
+          nullable: true
+        cod_allowed:
+          type: boolean
       required:
+      - category
       - id
       - name
       - price
+      - ratings
     ProductListRequest:
       type: object
       properties:
@@ -12610,6 +14377,16 @@ components:
           type: string
           format: uuid
           nullable: true
+        sizes:
+          type: array
+          items:
+            type: string
+            minLength: 1
+        base_currency:
+          type: string
+          nullable: true
+        cod_allowed:
+          type: boolean
       required:
       - name
       - price
@@ -12786,6 +14563,14 @@ components:
       - from_seller_products
       - similar_products
       - you_might_also_like
+    ProductRejectRequestRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          minLength: 1
+        notes:
+          type: string
     ProductReview:
       type: object
       properties:
@@ -13676,6 +15461,26 @@ components:
         * `rejected` - Rejected
         * `suspended` - Suspended
         * `inactive` - Inactive
+    StatusB49Enum:
+      enum:
+      - pending
+      - confirmed
+      - processing
+      - shipped
+      - delivered
+      - cancelled
+      - refunded
+      - returned
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `confirmed` - Confirmed
+        * `processing` - Processing
+        * `shipped` - Shipped
+        * `delivered` - Delivered
+        * `cancelled` - Cancelled
+        * `refunded` - Refunded
+        * `returned` - Returned
     Subcategory:
       type: object
       properties:
@@ -13709,6 +15514,56 @@ components:
       - id
       - name
       - updated_at
+    SubcategoryAdmin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        category:
+          type: string
+          format: uuid
+      required:
+      - category
+      - created_at
+      - id
+      - name
+      - updated_at
+    SubcategoryAdminRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        category:
+          type: string
+          format: uuid
+      required:
+      - category
+      - name
     SubscriptionPlan:
       type: object
       properties:
@@ -14152,6 +16007,57 @@ components:
       - is_active
       - profile
       - username
+    UserAdminCreateUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - email
+      - id
+    UserAdminCreateUpdateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          title: Email address
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - email
     UserCurrencyPreference:
       type: object
       properties:
@@ -14225,21 +16131,6 @@ components:
       required:
       - is_active
       - status
-    ValidateVoucherReqRequest:
-      type: object
-      properties:
-        voucher_code:
-          type: string
-          minLength: 1
-        order_subtotal:
-          type: number
-          format: double
-        voucherCode:
-          type: string
-          minLength: 1
-        orderAmount:
-          type: number
-          format: double
     ValidateVoucherRes:
       type: object
       properties:
@@ -14415,6 +16306,15 @@ components:
         user_email:
           type: string
           readOnly: true
+        product_count:
+          type: string
+          readOnly: true
+        approved_products:
+          type: string
+          readOnly: true
+        pending_products:
+          type: string
+          readOnly: true
         business_name:
           type: string
         business_description:
@@ -14518,10 +16418,13 @@ components:
           format: uuid
           nullable: true
       required:
+      - approved_products
       - business_email
       - business_name
       - created_at
       - id
+      - pending_products
+      - product_count
       - updated_at
       - user_email
     VendorAdminRequest:
@@ -15328,6 +17231,84 @@ components:
           nullable: true
       required:
       - rating
+    VendorSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        vendor_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        session_token:
+          type: string
+        refresh_token:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+          nullable: true
+        device_info:
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+      required:
+      - created_at
+      - expires_at
+      - id
+      - session_token
+      - updated_at
+      - user_id
+      - vendor_id
+    VendorSessionRequest:
+      type: object
+      properties:
+        vendor_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        session_token:
+          type: string
+          minLength: 1
+        refresh_token:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        is_active:
+          type: boolean
+          nullable: true
+        device_info:
+          nullable: true
+        ip_address:
+          type: string
+          nullable: true
+      required:
+      - expires_at
+      - session_token
+      - user_id
+      - vendor_id
     VendorSizeChartImageUploadRequest:
       type: object
       properties:
@@ -15615,6 +17596,40 @@ components:
         * `pending` - Pending
         * `verified` - Verified
         * `rejected` - Rejected
+    VersionCheckData:
+      type: object
+      properties:
+        isUpdateAvailable:
+          type: boolean
+        playStoreUrl:
+          type: string
+        appStoreUrl:
+          type: string
+      required:
+      - appStoreUrl
+      - isUpdateAvailable
+      - playStoreUrl
+    VersionCheckRequestRequest:
+      type: object
+      properties:
+        platform:
+          $ref: '#/components/schemas/PlatformEnum'
+        version:
+          type: string
+          minLength: 1
+      required:
+      - platform
+      - version
+    VersionCheckResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        data:
+          $ref: '#/components/schemas/VersionCheckData'
+      required:
+      - data
+      - status
     Wishlist:
       type: object
       properties:

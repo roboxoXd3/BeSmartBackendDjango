@@ -160,3 +160,84 @@ Send the image via `multipart/form-data` to the backend. The backend handles sec
       "image_url": "https://..."
     }
     ```
+
+---
+
+## 6. Authentication (Native Django JWT)
+
+### Previously (Supabase SDK)
+The frontend used `supabase.auth.signInWithPassword`, `signUp`, and `signOut` which returned a Supabase session containing an `access_token` and `refresh_token` wrapped in a `session` object.
+
+### New Django Endpoints
+The authentication endpoints have been rewritten to use native Django and SimpleJWT, completely removing the Supabase proxy layer. The URLs remain exactly the same to minimize disruption, but the JSON response format has been flattened.
+
+#### Login & Registration
+- **Login:** `POST /api/users/login/`
+- **Register:** `POST /api/users/register/`
+- **Vendor Login:** `POST /api/users/vendor-login/`
+- **Admin Login:** `POST /api/users/admin-login/`
+
+**New Response Format:**
+```json
+{
+  "message": "Login successful.",
+  "user": {
+    "id": "<user_uuid>",
+    "email": "user@example.com"
+  },
+  "access_token": "eyJhbGciOiJIUz...",
+  "refresh_token": "eyJhbGciOiJIUz..."
+}
+```
+*(Notice that `access_token` and `refresh_token` are now at the root level instead of inside a `session` object).*
+
+#### Token Refresh
+- **Refresh Token:** `POST /api/users/token/refresh/`
+  - **Payload:** `{"refresh": "<refresh_token>"}`
+  - **Response:**
+    ```json
+    {
+      "access": "eyJhbGciOiJIUz...",
+      "refresh": "eyJhbGciOiJIUz..."
+    }
+    ```
+*(Note: SimpleJWT uses the keys `access` and `refresh` for the token refresh response).*
+
+## 7. Bulk Upload (Vendor Context)
+
+### Previously (Supabase SDK)
+The vendor dashboard uploaded CSVs and processed product creations directly on the frontend using Supabase SDK calls to insert multiple rows into the `products` table.
+
+### New Django Endpoints
+Replace the manual loop of inserts with a single backend endpoint that handles batch creation and partial updates.
+
+- **Bulk Upload:** `POST /api/vendors/own-products/bulk-upload/`
+  - **Payload:** JSON containing a list of products under the `products` key.
+    ```json
+    {
+      "products": [
+        {
+          "name": "Product 1",
+          "description": "Desc 1",
+          "price": 100.0,
+          "stock_quantity": 10,
+          "category_id": "<category_uuid>",
+          "brand": "Brand X"
+        },
+        {
+          "id": "<existing_product_uuid>",
+          "stock_quantity": 50
+        }
+      ]
+    }
+    ```
+  - **Response:**
+    ```json
+    {
+      "message": "Bulk upload processed",
+      "created": 1,
+      "updated": 1
+    }
+    ```
+*(Note: Omitting the `id` field will create a new product, providing an `id` will update the existing product.)*
+
