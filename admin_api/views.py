@@ -171,6 +171,12 @@ class SystemStatsView(views.APIView):
         )}
     )
     def get(self, request):
+        from django.core.cache import cache
+        cache_key = 'admin_system_stats'
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response({"success": True, "data": cached_data})
+
         from django.db.models import Sum, Avg
         from django.utils import timezone
         from datetime import timedelta
@@ -179,8 +185,10 @@ class SystemStatsView(views.APIView):
         thirty_days_ago = now - timedelta(days=30)
         sixty_days_ago = now - timedelta(days=60)
         
-        total_revenue = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
-        avg_order_value = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(avg=Avg('total'))['avg'] or 0.00
+        order_aggs = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'), avg=Avg('total'))
+        total_revenue = order_aggs['total'] or 0.00
+        avg_order_value = order_aggs['avg'] or 0.00
+        
         total_payouts_pending = VendorPayout.objects.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0.00
         
         # Previous period
@@ -192,29 +200,32 @@ class SystemStatsView(views.APIView):
         curr_vendors = Vendor.objects.filter(created_at__gte=thirty_days_ago).count()
         vendors_change = ((curr_vendors - prev_vendors) / max(prev_vendors, 1)) * 100
         
-        prev_rev = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
-        prev_revenue = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
+        prev_order_aggs = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'), avg=Avg('total'))
+        prev_revenue = prev_order_aggs['total'] or 0.00
         revenue_change = ((float(total_revenue) - float(prev_revenue)) / max(float(prev_revenue), 1)) * 100
 
-        prev_aov = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(avg=Avg('total'))['avg'] or 0.00
+        prev_aov = prev_order_aggs['avg'] or 0.00
         aov_change = ((float(avg_order_value) - float(prev_aov)) / max(float(prev_aov), 1)) * 100
             
+        data = {
+            "totalUsers": User.objects.count(),
+            "totalVendors": Vendor.objects.count(),
+            "totalOrders": Order.objects.count(),
+            "totalProducts": Product.objects.count(),
+            "pendingVendors": Vendor.objects.filter(status='pending').count(),
+            "totalRevenue": round(float(total_revenue), 2),
+            "avgOrderValue": round(float(avg_order_value), 2),
+            "pendingPayouts": round(float(total_payouts_pending), 2),
+            "ordersChange": round(float(orders_change), 2),
+            "vendorsChange": round(float(vendors_change), 2),
+            "revenueChange": round(float(revenue_change), 2),
+            "avgOrderValueChange": round(float(aov_change), 2),
+        }
+        cache.set(cache_key, data, timeout=300)  # Cache for 5 mins
+        
         return Response({
             "success": True,
-            "data": {
-                "totalUsers": User.objects.count(),
-                "totalVendors": Vendor.objects.count(),
-                "totalOrders": Order.objects.count(),
-                "totalProducts": Product.objects.count(),
-                "pendingVendors": Vendor.objects.filter(status='pending').count(),
-                "totalRevenue": round(float(total_revenue), 2),
-                "avgOrderValue": round(float(avg_order_value), 2),
-                "pendingPayouts": round(float(total_payouts_pending), 2),
-                "ordersChange": round(float(orders_change), 2),
-                "vendorsChange": round(float(vendors_change), 2),
-                "revenueChange": round(float(revenue_change), 2),
-                "avgOrderValueChange": round(float(aov_change), 2),
-            }
+            "data": data
         })
 
 class AdminRecentActivityView(views.APIView):
@@ -272,6 +283,12 @@ class AdminRevenueChartView(views.APIView):
     )
     def get(self, request):
         period = request.query_params.get('period', '30d')
+        from django.core.cache import cache
+        cache_key = f'admin_revenue_chart_{period}'
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+
         from django.utils import timezone
         from datetime import timedelta
         from django.db.models.functions import TruncDate
@@ -296,10 +313,12 @@ class AdminRevenueChartView(views.APIView):
             for entry in daily_sales
         ]
         
-        return Response({
+        resp_data = {
             "trend": formatted_daily_sales,
             "period": period
-        })
+        }
+        cache.set(cache_key, resp_data, timeout=300) # Cache for 5 mins
+        return Response(resp_data)
 
 class ProductAdminFilter(django_filters.FilterSet):
     category = django_filters.UUIDFilter(field_name='category_id')
