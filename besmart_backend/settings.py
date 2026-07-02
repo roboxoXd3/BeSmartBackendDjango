@@ -66,9 +66,13 @@ INSTALLED_APPS = [
     'content',
     'search',
     'ai_services',
+    
+    # Observability
+    'django_prometheus',
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS first
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -78,6 +82,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'besmart_backend.middleware.tracing_middleware.TracingMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'besmart_backend.urls'
@@ -294,3 +300,73 @@ CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
 # Squad Payment Gateway
 SQUAD_SECRET_KEY = os.environ.get('SQUAD_PRIVATE_KEY', os.environ.get('SQUAD_SECRET_KEY', ''))
 SQUAD_BASE_URL = os.environ.get('SQUAD_BASE_URL', 'https://api-d.squadco.com')
+
+# ---------------------------------------------------------------------
+# OBSERVABILITY & LOGGING CONFIGURATION
+# ---------------------------------------------------------------------
+import structlog
+import logging.config
+
+LOKI_URL = os.getenv('LOKI_URL') # e.g., 'http://loki:3100/loki/api/v1/push'
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'local' if DEBUG else 'production')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.JSONRenderer(),
+        },
+        'plain': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.dev.ConsoleRenderer(colors=True),
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json' if not DEBUG else 'plain',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'besmart_backend': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # You can add custom loggers here if needed
+    },
+}
+
+if LOKI_URL:
+    LOGGING['handlers']['loki'] = {
+        'class': 'logging_loki.LokiHandler',
+        'url': LOKI_URL,
+        'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
+        'version': '1',
+    }
+    LOGGING['loggers']['django']['handlers'].append('loki')
+    LOGGING['loggers']['besmart_backend']['handlers'].append('loki')
+
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)

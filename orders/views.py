@@ -10,7 +10,9 @@ from .serializers import (
     WishlistSerializer, ShippingAddressSerializer
 )
 from drf_spectacular.utils import extend_schema, inline_serializer
+from besmart_backend.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 # ──────────────────────────────────────────────
 # Shipping Addresses
@@ -354,6 +356,8 @@ class OrderListCreateView(generics.ListCreateAPIView):
             used_voucher.used_at = timezone.now()
             used_voucher.order = order
             used_voucher.save(update_fields=['status', 'used_at', 'order_id'])
+            
+        logger.info("order_created", user_id=request.user.id, order_id=order.id, subtotal=subtotal, total=total)
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
@@ -380,6 +384,9 @@ class OrderCancelView(views.APIView):
             return Response({"error": "Order cannot be cancelled"}, status=status.HTTP_400_BAD_REQUEST)
         order.status = 'cancelled'
         order.save(update_fields=['status', 'updated_at'])
+        
+        logger.info("order_cancelled", user_id=request.user.id, order_id=order.id)
+        
         return Response({
             "success": True,
             "order": OrderSerializer(order).data,
@@ -423,6 +430,9 @@ class OrderPaymentStatusView(views.APIView):
             update_fields.append('escrow_status')
 
         order.save(update_fields=update_fields)
+        
+        logger.info("order_payment_status_updated", user_id=request.user.id, order_id=order.id, payment_status=order.payment_status)
+        
         return Response({
             'success': True,
             'order': OrderSerializer(order).data,

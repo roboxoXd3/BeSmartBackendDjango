@@ -14,6 +14,9 @@ from django.db.models import Subquery, OuterRef
 from categories.models import Category
 from .pagination import ProductCursorPagination
 
+from besmart_backend.utils.logger import get_logger
+logger = get_logger(__name__)
+
 def get_optimized_product_queryset(base_qs):
     category_name_sq = Category.objects.filter(id=OuterRef('category_id')).values('name')[:1]
     qs = base_qs.annotate(category_name=Subquery(category_name_sq))
@@ -156,8 +159,11 @@ class ProductViewTrackView(views.APIView):
                     INSERT INTO product_views (id, product_id, user_id, created_at)
                     VALUES (gen_random_uuid(), %s, %s, NOW())
                 """, [str(product.id), str(request.user.id) if request.user.is_authenticated else None])
-        except Exception:
+        except Exception as e:
+            logger.warning("product_view_tracking_error", product_id=id, error=str(e))
             pass
+            
+        logger.info("product_viewed", product_id=id, user_id=request.user.id if request.user.is_authenticated else None)
         return Response({"success": True})
 
 
@@ -190,6 +196,7 @@ class ProductReviewsListCreateView(generics.ListCreateAPIView):
             rating=d['rating'], title=d.get('title', ''), content=d.get('content', ''),
             images=d.get('images', []), verified_purchase=True
         )
+        logger.info("product_review_created", product_id=product.id, user_id=self.request.user.id, rating=d['rating'], review_id=self.created_review.id)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -313,6 +320,7 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
         self.created_qa = ProductQuestion.objects.create(
             product=product, user=self.request.user, question=d['question']
         )
+        logger.info("product_qa_question_created", product_id=product.id, user_id=self.request.user.id, qa_id=self.created_qa.id)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -392,6 +400,8 @@ class ProductQAAnswerView(views.APIView):
         qa.answered_at = tz.now()
         qa.status = 'published'
         qa.save(update_fields=['answer', 'answered_by', 'answered_at', 'status', 'updated_at'])
+        
+        logger.info("product_qa_answer_created", product_id=product.id, qa_id=qa.id, vendor_user_id=request.user.id)
 
         from .serializers import ProductQuestionSerializer
         return Response(ProductQuestionSerializer(qa).data)
@@ -413,6 +423,7 @@ class ProductQAHelpfulView(views.APIView):
         qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
         qa.is_helpful_count = (qa.is_helpful_count or 0) + 1
         qa.save(update_fields=['is_helpful_count'])
+        logger.info("product_qa_marked_helpful", product_id=id, qa_id=qa.id, user_id=request.user.id)
         return Response({"success": True, "is_helpful_count": qa.is_helpful_count})
 
 
@@ -852,10 +863,12 @@ class ProductVideoUploadView(views.APIView):
         key = f"product-videos/{product.id}/{job.id}.{ext}"
         try:
             start_async_upload(job.id, temp_path, key, video_file.content_type, product.id)
+            logger.info("product_video_upload_started", product_id=product.id, job_id=job.id, user_id=request.user.id)
         except Exception as e:
             job.status = 'failed'
             job.error_message = str(e)
             job.save()
+            logger.error("product_video_upload_failed", product_id=product.id, job_id=job.id, error=str(e), user_id=request.user.id)
             return Response({'error': 'Failed to initiate video upload', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({'job_id': job.id, 'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
@@ -891,7 +904,9 @@ class ProductColorImageUploadView(views.APIView):
             
             try:
                 public_url = upload_file_to_r2(image_file, key, image_file.content_type)
+                logger.info("product_color_image_uploaded", product_id=product.id, color_name=color_name, user_id=request.user.id)
             except Exception as e:
+                logger.error("product_color_image_upload_failed", product_id=product.id, color_name=color_name, error=str(e), user_id=request.user.id)
                 return Response({'error': 'Failed to upload image to storage', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             if not isinstance(color_name, str):

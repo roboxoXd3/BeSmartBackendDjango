@@ -9,6 +9,8 @@ from drf_spectacular.utils import extend_schema
 import uuid
 import requests as http_requests
 
+from besmart_backend.utils.logger import get_logger
+logger = get_logger(__name__)
 class PaymentMethodListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = PaymentMethodSerializer
@@ -124,12 +126,14 @@ class InitiatePaymentView(views.APIView):
                 transaction_ref = squad_data['data'].get('transaction_ref', transaction_ref)
             else:
                 # Squad API call failed — return error with Squad's message
+                logger.error("payment_initiation_failed", user_id=request.user.id, order_id=order.id, reason=squad_data.get('message', 'gateway error'))
                 return Response({
                     'status': 'error',
                     'message': squad_data.get('message', 'Payment gateway error'),
                 }, status=status.HTTP_502_BAD_GATEWAY)
 
         except Exception as e:
+            logger.error("payment_initiation_error", user_id=request.user.id, order_id=order.id, error=str(e))
             return Response({
                 'status': 'error',
                 'message': f'Could not reach payment gateway: {str(e)}',
@@ -138,6 +142,8 @@ class InitiatePaymentView(views.APIView):
         # Save transaction ref on the order
         order.squad_transaction_ref = transaction_ref
         order.save(update_fields=['squad_transaction_ref'])
+        
+        logger.info("payment_initiated", user_id=request.user.id, order_id=order.id, amount=amount, currency=currency, transaction_ref=transaction_ref)
 
         return Response({
             "status": "success",
@@ -172,6 +178,7 @@ class VerifyPaymentView(views.APIView):
             gateway_ref = squad_data.get('data', {}).get('gateway_transaction_ref', '')
             is_successful = payment_status.lower() == 'success'
         except Exception as e:
+            logger.error("payment_verification_error", transaction_ref=transaction_ref, error=str(e))
             return Response({
                 'status': 'error',
                 'message': f'Could not reach payment gateway: {str(e)}',
@@ -186,17 +193,20 @@ class VerifyPaymentView(views.APIView):
                     if gateway_ref:
                         order.squad_gateway_ref = gateway_ref
                     order.save()
+                    logger.info("payment_verified", user_id=request.user.id, order_id=order.id, transaction_ref=transaction_ref)
                 return Response({
                     "status": "success",
                     "message": "Payment verified and order confirmed",
                     "gateway_ref": gateway_ref,
                 })
             except Order.DoesNotExist:
+                logger.warning("payment_verification_order_not_found", transaction_ref=transaction_ref)
                 return Response(
                     {"status": "error", "message": "Order not found for this reference"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
+        logger.error("payment_verification_failed", transaction_ref=transaction_ref, payment_status=payment_status)
         return Response(
             {"status": "error", "message": f"Payment not successful. Status: {payment_status}"},
             status=status.HTTP_400_BAD_REQUEST,
@@ -205,13 +215,14 @@ class VerifyPaymentView(views.APIView):
 class PaymentWebhookView(views.APIView):
     permission_classes = [permissions.AllowAny] # Webhooks come from external service
 
-    @extend_schema(exclude=True)
     def post(self, request):
         # Validate signature usually
         data = request.data
+        transaction_ref = data.get('transaction_ref', 'unknown')
+        logger.info("payment_webhook_received", transaction_ref=transaction_ref)
         # Log webhook
         PaymentWebhook.objects.create(
-            transaction_ref=data.get('transaction_ref', 'unknown'),
+            transaction_ref=transaction_ref,
             webhook_data=data
         )
         

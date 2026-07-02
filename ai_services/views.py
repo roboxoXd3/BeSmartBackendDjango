@@ -14,8 +14,8 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 
 from . import intent_service, product_search_service, response_service, image_analysis_service
 
-logger = logging.getLogger(__name__)
-
+from besmart_backend.utils.logger import get_logger
+logger = get_logger(__name__)
 
 @extend_schema(
     summary="AI Chat endpoint",
@@ -39,7 +39,7 @@ def chat(request):
     try:
         # Step 1: Classify intent
         intent = intent_service.recognize_intent(user_message)
-        logger.info('Chat intent: %s for user %s', intent.get('intent'), request.user)
+        logger.info('ai_chat_intent_recognized', intent=intent.get('intent'), user_id=request.user.id)
 
         # Step 2: Search products if needed
         products = []
@@ -64,6 +64,7 @@ def chat(request):
         # Serialize products to JSON-safe dicts
         serialized_products = [_serialize_product(p) for p in products[:8]]
 
+        logger.info('ai_chat_response_generated', user_id=request.user.id, intent=intent.get('intent'), product_count=len(serialized_products))
         return Response({
             'text': result['text'],
             'products': serialized_products,
@@ -72,7 +73,7 @@ def chat(request):
         })
 
     except Exception as e:
-        logger.error('Chat endpoint error: %s', e, exc_info=True)
+        logger.error('ai_chat_error', error=str(e), user_id=request.user.id, exc_info=True)
         return Response(
             {'error': 'Failed to process message. Please try again.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -102,7 +103,7 @@ def analyze_image(request):
 
         # Step 1: Analyze image with OpenAI Vision
         description = image_analysis_service.analyze_image(image_bytes, content_type)
-        logger.info('Image analysis result: %s', description)
+        logger.info('ai_image_analyzed', user_id=request.user.id, description=description)
 
         # Step 2: Search products based on description
         raw_products = product_search_service.search_by_image_description(description, limit=20)
@@ -115,7 +116,7 @@ def analyze_image(request):
         })
 
     except Exception as e:
-        logger.error('Image analysis endpoint error: %s', e, exc_info=True)
+        logger.error('ai_image_analysis_error', error=str(e), user_id=request.user.id, exc_info=True)
         return Response(
             {'error': 'Failed to analyze image. Please try again.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,

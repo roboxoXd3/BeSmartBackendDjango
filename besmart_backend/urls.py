@@ -5,6 +5,7 @@ from admin_api.views import VersionCheckView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('prometheus/', include('django_prometheus.urls')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

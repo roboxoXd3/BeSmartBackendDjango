@@ -1,5 +1,8 @@
 from rest_framework import generics, permissions, status, views, viewsets
 from rest_framework.response import Response
+from besmart_backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 from django.shortcuts import get_object_or_404
 from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from .serializers import (
@@ -98,6 +101,7 @@ class UserAdminViewSet(viewsets.ModelViewSet):
         elif action_type == 'activate':
             user.is_active = True
         user.save(update_fields=['is_active'])
+        logger.info("admin_updated_user_status", admin_id=request.user.id, target_user_id=user.id, new_status=action_type)
         return Response({'status': 'user status updated', 'is_active': user.is_active})
 
 class VendorAdminViewSet(viewsets.ModelViewSet):
@@ -139,6 +143,7 @@ class VendorAdminViewSet(viewsets.ModelViewSet):
             vendor.admin_notes = admin_notes
             
         vendor.save()
+        logger.info("admin_updated_vendor_status", admin_id=request.user.id, target_vendor_id=vendor.id, new_status=new_status, has_notes=bool(admin_notes))
         return Response({'status': 'vendor status updated', 'vendor_status': vendor.status})
 
 class SystemStatsView(views.APIView):
@@ -364,6 +369,7 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
         product = self.get_object()
         product.approval_status = 'approved'
         product.save(update_fields=['approval_status'])
+        logger.info("admin_approved_product", admin_id=request.user.id, product_id=product.id)
         return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
     @extend_schema(
@@ -388,6 +394,7 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
             # Note: We might need a notes field on the product model or admin log
             pass
         product.save(update_fields=['approval_status'])
+        logger.info("admin_rejected_product", admin_id=request.user.id, product_id=product.id)
         return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
     @extend_schema(
@@ -408,6 +415,7 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
         if new_status in ['approved', 'rejected', 'pending']:
             product.approval_status = new_status
             product.save(update_fields=['approval_status'])
+            logger.info("admin_updated_product_status", admin_id=request.user.id, product_id=product.id, new_status=new_status)
             return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
         return Response({'error': 'invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -449,6 +457,7 @@ class OrderAdminViewSet(viewsets.ModelViewSet):
         if new_status:
             order.status = new_status
             order.save(update_fields=['status', 'updated_at'])
+            logger.info("admin_updated_order_status", admin_id=request.user.id, order_id=order.id, new_status=new_status)
             return Response({'status': 'order status updated', 'order_status': order.status})
         return Response({'error': 'missing status'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -489,6 +498,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
             payout.admin_notes = admin_notes
             
         payout.save()
+        logger.info("admin_updated_payout_status", admin_id=request.user.id, payout_id=payout.id, new_status=new_status)
         return Response({'status': 'payout updated', 'payout_status': payout.status})
 
 class TransactionAdminViewSet(viewsets.ReadOnlyModelViewSet):

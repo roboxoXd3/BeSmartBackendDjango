@@ -20,6 +20,9 @@ from django.utils.http import urlsafe_base64_encode
 from django.core.mail import send_mail
 import os
 import uuid
+from besmart_backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 User = get_user_model()
 
@@ -59,6 +62,7 @@ class RegisterView(APIView):
                 first_name=first_name
             )
             
+            logger.info("user_registered", user_id=user.id)
             tokens = get_tokens_for_user(user)
             
             return Response({
@@ -91,6 +95,7 @@ class LoginView(APIView):
         user = authenticate(request, username=email, password=password)
         
         if user is not None:
+            logger.info("user_login_success", user_id=user.id)
             tokens = get_tokens_for_user(user)
             return Response({
                 "message": "Login successful.",
@@ -99,6 +104,7 @@ class LoginView(APIView):
                 "refresh_token": tokens["refresh_token"]
             }, status=status.HTTP_200_OK)
         else:
+            logger.warning("user_login_failed", reason="invalid_credentials")
             return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class VendorLoginView(APIView):
@@ -123,8 +129,10 @@ class VendorLoginView(APIView):
             from vendors.models import Vendor
             vendor = Vendor.objects.filter(user=user).first()
             if not vendor:
+                logger.warning("vendor_login_failed", user_id=user.id, reason="not_a_vendor")
                 return Response({"error": "This account is not registered as a vendor."}, status=status.HTTP_403_FORBIDDEN)
                 
+            logger.info("vendor_login_success", user_id=user.id, vendor_id=vendor.id)
             tokens = get_tokens_for_user(user)
             return Response({
                 "message": "Vendor login successful.",
@@ -138,6 +146,7 @@ class VendorLoginView(APIView):
                 "refresh_token": tokens["refresh_token"]
             }, status=status.HTTP_200_OK)
         else:
+            logger.warning("vendor_login_failed", reason="invalid_credentials")
             return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class AdminLoginView(APIView):
@@ -160,8 +169,10 @@ class AdminLoginView(APIView):
         user = authenticate(request, username=email, password=password)
         if user is not None:
             if not user.is_staff:
+                logger.warning("admin_login_failed", user_id=user.id, reason="not_an_admin")
                 return Response({"error": "This account does not have admin privileges."}, status=status.HTTP_403_FORBIDDEN)
                 
+            logger.info("admin_login_success", user_id=user.id)
             tokens = get_tokens_for_user(user)
             return Response({
                 "message": "Admin login successful.",
@@ -175,6 +186,7 @@ class AdminLoginView(APIView):
                 "refresh_token": tokens["refresh_token"]
             }, status=status.HTTP_200_OK)
         else:
+            logger.warning("admin_login_failed", reason="invalid_credentials")
             return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
 class LogoutView(APIView):
@@ -244,6 +256,7 @@ class PasswordChangeView(APIView):
             user = request.user
             user.set_password(new_password)
             user.save()
+            logger.info("password_changed", user_id=user.id)
             return Response({"message": "Password updated successfully."}, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -333,6 +346,7 @@ class AccountDeleteView(APIView):
             user.username = user.email
             user.is_active = False
             user.save()
+            logger.info("account_deleted", user_id=user.id)
             # No Supabase call needed anymore
         except Exception as e:
             return Response({"success": False, "error": "deletion_failed", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -423,6 +437,8 @@ class ProfilePhotoUploadView(APIView):
             # Update user's profile image path
             profile.image_path = file_url
             profile.save(update_fields=['image_path', 'updated_at'])
+            
+            logger.info("profile_photo_uploaded", user_id=request.user.id, file_url=file_url)
             
             # Return response
             profile_serializer = ProfileSerializer(profile)

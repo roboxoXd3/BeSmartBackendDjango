@@ -29,6 +29,9 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serial
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
 
+from besmart_backend.utils.logger import get_logger
+logger = get_logger(__name__)
+
 # ============ Customer-facing Vendor APIs (Phase 2) ============
 
 def _approved_vendors():
@@ -273,7 +276,8 @@ class VendorRegisterView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        vendor = serializer.save(user=self.request.user)
+        logger.info("vendor_registered", vendor_id=vendor.id, user_id=self.request.user.id)
 
 class VendorProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -581,17 +585,20 @@ class VendorPayoutListView(generics.ListCreateAPIView):
             
             if response.get('status') == 200 and not response.get('error'):
                  # Squad might return success even if pending
-                 serializer.save(
+                 payout = serializer.save(
                      vendor=vendor, 
                      status='processing',
                      squad_transaction_ref=transaction_ref,
                      bank_account=bank_account
                  )
+                 logger.info("vendor_payout_initiated", vendor_id=vendor.id, amount=amount, payout_id=payout.id, ref=transaction_ref)
             else:
+                 logger.error("vendor_payout_failed", vendor_id=vendor.id, amount=amount, reason=response.get('message'))
                  from rest_framework.exceptions import APIException
                  raise APIException(f"Transfer failed: {response.get('message')}")
                  
         except Exception as e:
+             logger.error("vendor_payout_error", vendor_id=vendor.id, amount=amount, error=str(e))
              from rest_framework.exceptions import APIException
              raise APIException(f"Payout processing error: {str(e)}")
 
@@ -669,7 +676,8 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         vendor = get_object_or_404(Vendor, user=self.request.user)
-        serializer.save(vendor_id=vendor.id)
+        product = serializer.save(vendor_id=vendor.id)
+        logger.info("product_created", vendor_id=vendor.id, product_id=product.id)
 
     @extend_schema(
         summary="Update stock quantity",
@@ -737,6 +745,7 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
                     serializer.save(vendor_id=vendor.id)
                     created_count += 1
                     
+        logger.info("products_bulk_uploaded", vendor_id=vendor.id, created_count=created_count, updated_count=updated_count)
         return Response({
             'message': 'Bulk upsert completed',
             'updated_count': updated_count,
@@ -797,6 +806,8 @@ class VendorOrderViewSet(viewsets.ReadOnlyModelViewSet):
             order.notes = notes
             
         order.save(update_fields=['status', 'tracking_number', 'notes', 'updated_at'])
+        
+        logger.info("order_status_updated", vendor_id=order.vendor_id, order_id=order.id, new_status=order.status)
         return Response({'status': 'order updated', 'order_status': order.status})
 
 class VendorEscrowDummy(serializers.Serializer):
