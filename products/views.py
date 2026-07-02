@@ -10,13 +10,30 @@ from .serializers import ProductListSerializer, ProductDetailSerializer
 from .permissions import IsAdminOrProductVendor
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from rest_framework import serializers
+from django.db.models import Subquery, OuterRef
+from categories.models import Category
+from .pagination import ProductCursorPagination
+
+def get_optimized_product_queryset(base_qs):
+    category_name_sq = Category.objects.filter(id=OuterRef('category_id')).values('name')[:1]
+    qs = base_qs.annotate(category_name=Subquery(category_name_sq))
+    qs = qs.only(
+        'id', 'name', 'price', 'images', 'rating', 'reviews', 'in_stock',
+        'discount_percentage', 'is_on_sale', 'sale_price', 'is_featured',
+        'is_new_arrival', 'sku', 'status', 'stock_quantity', 'category_id',
+        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date'
+    )
+    return qs
 
 class ProductListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
-    queryset = Product.objects.all().filter(status='active', approval_status='approved')
     serializer_class = ProductListSerializer
-    pagination_class = None
+    pagination_class = ProductCursorPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    
+    def get_queryset(self):
+        qs = Product.objects.all().filter(status='active', approval_status='approved')
+        return get_optimized_product_queryset(qs)
     
     # Filter fields
     filterset_fields = {
@@ -55,30 +72,41 @@ class ProductDetailView(generics.RetrieveAPIView):
 
 class FeaturedProductsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
-    queryset = Product.objects.filter(is_featured=True, status='active', approval_status='approved')
     serializer_class = ProductListSerializer
-    pagination_class = None
+    pagination_class = ProductCursorPagination
+    
+    def get_queryset(self):
+        qs = Product.objects.filter(is_featured=True, status='active', approval_status='approved')
+        return get_optimized_product_queryset(qs)
 
 class NewArrivalsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
-    queryset = Product.objects.filter(is_new_arrival=True, status='active', approval_status='approved').order_by('-added_date')
     serializer_class = ProductListSerializer
-    pagination_class = None
+    pagination_class = ProductCursorPagination
+    
+    def get_queryset(self):
+        qs = Product.objects.filter(is_new_arrival=True, status='active', approval_status='approved').order_by('-added_date')
+        return get_optimized_product_queryset(qs)
 
 class OnSaleProductsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
-    queryset = Product.objects.filter(is_on_sale=True, status='active', approval_status='approved')
     serializer_class = ProductListSerializer
-    pagination_class = None
+    pagination_class = ProductCursorPagination
+    
+    def get_queryset(self):
+        qs = Product.objects.filter(is_on_sale=True, status='active', approval_status='approved')
+        return get_optimized_product_queryset(qs)
 
 class ProductSearchView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = ProductListSerializer
+    pagination_class = ProductCursorPagination
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'description', 'brand']
     
     def get_queryset(self):
-        return Product.objects.filter(status='active', approval_status='approved')
+        qs = Product.objects.filter(status='active', approval_status='approved')
+        return get_optimized_product_queryset(qs)
 
 
 class ProductSizeChartView(views.APIView):

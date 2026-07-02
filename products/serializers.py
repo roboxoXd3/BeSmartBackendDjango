@@ -17,6 +17,8 @@ class ProductListSerializer(serializers.ModelSerializer):
         ]
         
     def get_category(self, obj):
+        if hasattr(obj, 'category_name'):
+            return obj.category_name
         if not obj.category_id:
             return None
         from categories.models import Category
