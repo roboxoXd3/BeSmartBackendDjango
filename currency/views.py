@@ -87,14 +87,25 @@ def fetch_and_update_rates():
         logger.exception('Currency update: failed')
 
 
+_last_db_check = None
+
 def _trigger_update_if_needed():
     """If the newest rate is older than 24 h, kick off a background refresh.
     Non-blocking — returns immediately."""
+    global _last_db_check
+    now = timezone.now()
+    
+    # 5-minute memory cache to prevent DB queries on every request
+    if _last_db_check and now - _last_db_check < timedelta(minutes=5):
+        return
+
     newest = CurrencyRate.objects.order_by('-updated_at').values_list('updated_at', flat=True).first()
     if newest is None:
         return
 
-    if timezone.now() - newest < _RATE_MAX_AGE:
+    _last_db_check = now
+
+    if now - newest < _RATE_MAX_AGE:
         return  # still fresh
 
     # Try to acquire the lock without blocking; skip if another thread is already updating
