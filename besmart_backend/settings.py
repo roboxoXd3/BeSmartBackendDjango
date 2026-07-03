@@ -360,6 +360,7 @@ if LOKI_URL:
         'url': LOKI_URL,
         'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
         'version': '1',
+        'formatter': 'json',
     }
     LOGGING['loggers']['django']['handlers'].append('loki')
     LOGGING['loggers']['besmart_backend']['handlers'].append('loki')
