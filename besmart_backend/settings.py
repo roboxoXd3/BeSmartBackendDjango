@@ -340,6 +340,16 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'users': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'products': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'orders': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'payments': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'loyalty': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'vendors': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'admin_api': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'support': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'categories': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'currency': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         # You can add custom loggers here if needed
     },
 }
@@ -353,6 +363,10 @@ if LOKI_URL:
     }
     LOGGING['loggers']['django']['handlers'].append('loki')
     LOGGING['loggers']['besmart_backend']['handlers'].append('loki')
+    
+    # Append Loki handler to all our local apps
+    for app in ['users', 'products', 'orders', 'payments', 'loyalty', 'vendors', 'admin_api', 'support', 'categories', 'currency']:
+        LOGGING['loggers'][app]['handlers'].append('loki')
 
 structlog.configure(
     processors=[
