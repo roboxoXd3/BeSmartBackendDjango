@@ -46,8 +46,9 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             return None
 
         try:
-            from users.views import get_supabase_client
-            supabase = get_supabase_client()
+            from supabase import create_client
+            from django.conf import settings
+            supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
             user_response = supabase.auth.get_user(token)
             user_data = user_response.user
