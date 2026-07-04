@@ -63,7 +63,7 @@ def _recognize_with_ai(message: str) -> dict:
     if not api_key:
         raise ValueError('OPENAI_API_KEY not configured')
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=20.0)
     response = client.chat.completions.create(
         model='gpt-4o-mini',
         messages=[

@@ -117,7 +117,7 @@ class InitiatePaymentView(views.APIView):
                     'Authorization': f'Bearer {squad_secret_key}',
                     'Content-Type': 'application/json',
                 },
-                timeout=30,
+                timeout=15,
             )
             squad_data = squad_response.json()
 
@@ -171,7 +171,7 @@ class VerifyPaymentView(views.APIView):
                     'Authorization': f'Bearer {squad_secret_key}',
                     'Content-Type': 'application/json',
                 },
-                timeout=20,
+                timeout=15,
             )
             squad_data = squad_response.json()
             payment_status = squad_data.get('data', {}).get('transaction_status', '')

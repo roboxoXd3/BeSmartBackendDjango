@@ -65,6 +65,7 @@ class Product(models.Model):
     size_chart_override = models.TextField(null=True, blank=True)
     rejection_reason = models.TextField(null=True, blank=True)
     cod_allowed = models.BooleanField(default=True)
+    size_chart_visible = models.BooleanField(default=True)
     
     class Meta:
         db_table = 'products'

@@ -1,0 +1,347 @@
+{
+  "info": {
+    "name": "BeSmart Backend API (Optimized)",
+    "description": "Collection of APIs optimized in the recent performance sprint including paginated product lists and Supabase auth.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.xbesmart.com",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "supabase_url",
+      "value": "https://<YOUR_SUPABASE_ID>.supabase.co",
+      "type": "string"
+    },
+    {
+      "key": "supabase_anon_key",
+      "value": "<YOUR_ANON_KEY>",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Supabase Auth (Get Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if(jsonData.access_token) {",
+                  "    pm.collectionVariables.set(\"access_token\", jsonData.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "apikey",
+                "value": "{{supabase_anon_key}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sa3198154@gmail.com\",\n  \"password\": \"avi10102\"\n}"
+            },
+            "url": {
+              "raw": "{{supabase_url}}/auth/v1/token?grant_type=password",
+              "host": [
+                "{{supabase_url}}"
+              ],
+              "path": [
+                "auth",
+                "v1",
+                "token"
+              ],
+              "query": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Products List (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Featured Products (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/featured/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "featured",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "New Arrivals (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/new-arrivals/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "new-arrivals",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "On Sale Products (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/on-sale/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "on-sale",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Product Search (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/products/search/?search=shoes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "search",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "shoes"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Categories List (Optimized)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/categories/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Category Products (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/categories/CATEGORY_ID/products/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "categories",
+                "CATEGORY_ID",
+                "products",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Order List (Optimized)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/orders/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "orders",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Dashboard",
+      "item": [
+        {
+          "name": "System Stats (Cached)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard/system-stats/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "system-stats",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revenue Chart (Cached)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard/revenue-chart/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "revenue-chart",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Currency",
+      "item": [
+        {
+          "name": "Currency Rates (Cached)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/currency/rates/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "currency",
+                "rates",
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

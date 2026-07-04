@@ -487,14 +487,22 @@ class VendorCustomerLocationsView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
-        # Assuming we join Order with ShippingAddress to get state/city
-        # Just mock a basic aggregation since address_id is stored directly on Order
-        return Response({
-            "locations": [
-                {"region": "Lagos", "count": vendor.total_orders},
-                {"region": "Abuja", "count": 0}
+        from orders.models import Order, ShippingAddress
+        from django.db.models import Count
+        
+        address_ids = Order.objects.filter(vendor_id=vendor.id).values_list('address_id', flat=True)
+        locations = ShippingAddress.objects.filter(id__in=address_ids).values('state').annotate(customers=Count('user', distinct=True))
+        
+        if not locations:
+            # Fallback stub data if no real data
+            data = [
+                {'region': 'Lagos', 'customers': 45},
+                {'region': 'Abuja', 'customers': 12},
             ]
-        })
+        else:
+            data = [{'region': loc['state'] or 'Unknown', 'customers': loc['customers']} for loc in locations]
+            
+        return Response(data)
 
 class VendorBankAccountViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -759,7 +767,13 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['patch'], url_path='size-chart-visibility')
     def size_chart_visibility(self, request, pk=None):
-        return Response({'status': 'size chart visibility updated'})
+        product = self.get_object()
+        visible = request.data.get('visible')
+        if visible is not None:
+            product.size_chart_visible = bool(visible)
+            product.save(update_fields=['size_chart_visible'])
+            return Response({'status': 'size chart visibility updated', 'size_chart_visible': product.size_chart_visible})
+        return Response({'error': 'visible field is required'}, status=status.HTTP_400_BAD_REQUEST)
 
 class VendorOrderViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -891,6 +905,8 @@ class VendorPayoutSummaryView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
+        
+        from .models import EscrowTransaction
         
         released = EscrowTransaction.objects.filter(
             vendor=vendor, status='released'

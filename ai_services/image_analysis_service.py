@@ -48,7 +48,7 @@ def analyze_image(image_bytes: bytes, content_type: str = 'image/jpeg') -> str:
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=api_key, timeout=20.0)
             response = client.chat.completions.create(
                 model='gpt-4o-mini',
                 messages=[

@@ -112,7 +112,7 @@ def _generate_ai_response(
         user_message, intent, products, conversation_context, faqs, product_specs,
     )
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=20.0)
     response = client.chat.completions.create(
         model='gpt-4o-mini',
         messages=[

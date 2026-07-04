@@ -64,7 +64,7 @@ class SquadPaymentService:
             payload['metadata'] = metadata
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -83,7 +83,7 @@ class SquadPaymentService:
         url = f"{self.base_url}/transaction/verify/{transaction_ref}"
         
         try:
-            response = requests.get(url, headers=self._get_headers())
+            response = requests.get(url, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -144,7 +144,7 @@ class SquadTransferService:
         }
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             data = response.json()
             
@@ -206,7 +206,7 @@ class SquadTransferService:
         }
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -227,7 +227,7 @@ class SquadTransferService:
         payload = {'transaction_reference': transaction_ref}
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:

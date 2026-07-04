@@ -88,10 +88,10 @@ class PaymentWebhook(models.Model):
     order_id = models.UUIDField(null=True, blank=True)
     
     # Raw data
-    webhook_data = models.JSONField()
+    webhook_data = models.JSONField(default=dict)
     
     # Processing status
-    status = models.CharField(max_length=255)
+    status = models.CharField(max_length=255, default='received')
     processed_at = models.DateTimeField(blank=True, null=True)
     
     # Timestamps

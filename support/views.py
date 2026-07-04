@@ -34,18 +34,29 @@ class SupportTicketViewSet(viewsets.ModelViewSet):
         vendor = get_object_or_404(Vendor, user=self.request.user)
         serializer.save(vendor=vendor)
 
-class SupportMessageView(generics.CreateAPIView):
+class SupportMessageView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = SupportMessageSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            from .models import SupportMessage
+            return SupportMessage.objects.none()
+        ticket_id = self.kwargs.get('ticket_id')
+        ticket = get_object_or_404(SupportTicket, id=ticket_id)
+        if ticket.vendor.user != self.request.user:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to view messages for this ticket.")
+        from .models import SupportMessage
+        return SupportMessage.objects.filter(ticket=ticket).order_by('created_at')
 
     def perform_create(self, serializer):
         ticket_id = self.kwargs.get('ticket_id')
         ticket = get_object_or_404(SupportTicket, id=ticket_id)
         # Verify ownership
         if ticket.vendor.user != self.request.user:
-            # In real app, Admin should also be able to post.
-            # Assuming simplified logic where only vendor posts for now via this endpoint
-             pass 
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to post messages to this ticket.")
         serializer.save(ticket=ticket, sender=self.request.user)
 
 class ChatConversationViewSet(viewsets.ModelViewSet):

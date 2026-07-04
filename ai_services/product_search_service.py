@@ -124,7 +124,7 @@ def semantic_search(query: str, limit: int = 10, threshold: float = 0.3) -> list
         if not api_key:
             return enhanced_keyword_search(query, limit=limit)
 
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=20.0)
         embedding_response = client.embeddings.create(
             model='text-embedding-3-small',
             input=query,
