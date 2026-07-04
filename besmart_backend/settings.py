@@ -360,9 +360,12 @@ LOGGING = {
     },
 }
 
+import queue
+
 if LOKI_URL:
     LOGGING['handlers']['loki'] = {
-        'class': 'logging_loki.LokiHandler',
+        '()': 'logging_loki.LokiQueueHandler',
+        'queue': queue.Queue(-1),
         'url': LOKI_URL,
         'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
         'version': '1',
