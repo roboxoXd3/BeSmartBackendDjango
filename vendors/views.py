@@ -377,10 +377,18 @@ class VendorDashboardStatsView(views.APIView):
         elif period == '1y': start_date = now - timedelta(days=365)
         
         from orders.models import Order
-        orders = Order.objects.filter(vendor_id=vendor.id, created_at__gte=start_date)
+        all_orders = Order.objects.filter(vendor_id=vendor.id)
+        orders = all_orders.filter(created_at__gte=start_date)
         
-        total_sales = orders.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
-        pending_orders = orders.filter(status='pending').count()
+        total_sales = all_orders.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
+        
+        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        monthly_revenue = all_orders.filter(
+            status__in=['delivered', 'shipped', 'confirmed'], 
+            created_at__gte=current_month_start
+        ).aggregate(total=Sum('total'))['total'] or 0.00
+        
+        pending_orders = all_orders.filter(status='pending').count()
         total_products = Product.objects.filter(vendor_id=vendor.id).count()
         
         # Follower count
@@ -388,12 +396,12 @@ class VendorDashboardStatsView(views.APIView):
         
         return Response({
             "totalProducts": total_products,
-            "totalOrders": orders.count(),
+            "totalOrders": all_orders.count(),
             "totalSales": total_sales,
             "pendingOrders": pending_orders,
             "followerCount": follower_count,
             "currency": "NGN",
-            "monthlyRevenue": total_sales # Simple mapping for the dashboard spec
+            "monthlyRevenue": monthly_revenue
         })
 
 class VendorAnalyticsSalesView(views.APIView):
