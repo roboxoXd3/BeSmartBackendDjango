@@ -15,7 +15,7 @@ from products.serializers import (
 from .models import (
     Vendor, VendorReview, VendorBankAccount, VendorPayout,
     VendorFollow, PayoutTransaction, SubscriptionPlan, VendorSubscription,
-    VendorSizeChartTemplate, VendorSessions
+    VendorSizeChartTemplate, VendorSessions, EscrowTransaction
 )
 from .serializers import (
     VendorSerializer, VendorRegisterSerializer, VendorReviewSerializer,
@@ -378,17 +378,20 @@ class VendorDashboardStatsView(views.APIView):
         
         from orders.models import Order
         all_orders = Order.objects.filter(vendor_id=vendor.id)
-        orders = all_orders.filter(created_at__gte=start_date)
-        
-        total_sales = all_orders.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
         
         current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        monthly_revenue = all_orders.filter(
-            status__in=['delivered', 'shipped', 'confirmed'], 
-            created_at__gte=current_month_start
-        ).aggregate(total=Sum('total'))['total'] or 0.00
         
-        pending_orders = all_orders.filter(status='pending').count()
+        from django.db.models import Sum, Count, Q
+        metrics = all_orders.aggregate(
+            total_sales=Sum('total', filter=Q(status__in=['delivered', 'shipped', 'confirmed'])),
+            monthly_revenue=Sum('total', filter=Q(status__in=['delivered', 'shipped', 'confirmed'], created_at__gte=current_month_start)),
+            pending_orders=Count('id', filter=Q(status='pending'))
+        )
+        
+        total_sales = metrics['total_sales'] or 0.00
+        monthly_revenue = metrics['monthly_revenue'] or 0.00
+        pending_orders = metrics['pending_orders'] or 0
+        
         total_products = Product.objects.filter(vendor_id=vendor.id).count()
         
         # Follower count
@@ -479,11 +482,17 @@ class VendorAnalyticsMetricsView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
+        
+        from orders.models import Order
+        total_orders = Order.objects.filter(vendor_id=vendor.id).count()
+        returned_orders = Order.objects.filter(vendor_id=vendor.id, status__in=['refunded', 'returned']).count()
+        return_rate = round(returned_orders / total_orders, 4) if total_orders > 0 else 0.0
+        
         return Response({
             "average_rating": vendor.average_rating,
             "total_reviews": vendor.total_reviews,
             "conversion_rate": 0.05,  # Placeholder/mocked for now
-            "return_rate": 0.01,
+            "return_rate": return_rate,
         })
         
 class VendorCustomerLocationsView(views.APIView):
@@ -498,8 +507,7 @@ class VendorCustomerLocationsView(views.APIView):
         from orders.models import Order, ShippingAddress
         from django.db.models import Count
         
-        address_ids = Order.objects.filter(vendor_id=vendor.id).values_list('address_id', flat=True)
-        locations = ShippingAddress.objects.filter(id__in=address_ids).values('state').annotate(customers=Count('user', distinct=True))
+        locations = ShippingAddress.objects.filter(order__vendor_id=vendor.id).values('state').annotate(customers=Count('user', distinct=True))
         
         if not locations:
             # Fallback stub data if no real data
@@ -552,7 +560,6 @@ class VendorPayoutListView(generics.ListCreateAPIView):
         
         from django.db.models import Sum
         from decimal import Decimal
-        from .models import EscrowTransaction
         
         released = EscrowTransaction.objects.filter(
             vendor=vendor, 
@@ -778,7 +785,7 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         product = self.get_object()
         visible = request.data.get('visible')
         if visible is not None:
-            product.size_chart_visible = bool(visible)
+            product.size_chart_visible = str(visible).lower() in ['true', '1', 't', 'y', 'yes']
             product.save(update_fields=['size_chart_visible'])
             return Response({'status': 'size chart visibility updated', 'size_chart_visible': product.size_chart_visible})
         return Response({'error': 'visible field is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -840,7 +847,6 @@ class VendorEscrowViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = VendorEscrowDummy
     
     def get_queryset(self):
-        from .models import EscrowTransaction
         if getattr(self, 'swagger_fake_view', False):
             return EscrowTransaction.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
@@ -913,8 +919,6 @@ class VendorPayoutSummaryView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
-        
-        from .models import EscrowTransaction
         
         released = EscrowTransaction.objects.filter(
             vendor=vendor, status='released'
