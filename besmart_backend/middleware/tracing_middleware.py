@@ -35,6 +35,10 @@ class TracingMiddleware(MiddlewareMixin):
         )
 
     def process_response(self, request, response):
+        # Skip logging for Prometheus metrics endpoint to reduce noise
+        if request.path.startswith('/prometheus/metrics'):
+            return response
+
         # The user object is typically attached to the request by the authentication middleware or DRF
         user_id = "anonymous"
         if hasattr(request, "user") and request.user.is_authenticated:

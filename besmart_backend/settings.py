@@ -313,6 +313,11 @@ ENVIRONMENT = os.getenv('ENVIRONMENT', 'local' if DEBUG else 'production')
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'ignore_prometheus': {
+            '()': 'besmart_backend.logging_filters.PrometheusEndpointFilter',
+        },
+    },
     'formatters': {
         'json': {
             '()': structlog.stdlib.ProcessorFormatter,
@@ -327,6 +332,7 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'json' if not DEBUG else 'plain',
+            'filters': ['ignore_prometheus'],
         },
     },
     'loggers': {
@@ -361,6 +367,7 @@ if LOKI_URL:
         'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
         'version': '1',
         'formatter': 'json',
+        'filters': ['ignore_prometheus'],
     }
     LOGGING['loggers']['django']['handlers'].append('loki')
     LOGGING['loggers']['besmart_backend']['handlers'].append('loki')
