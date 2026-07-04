@@ -8,7 +8,7 @@ from .serializers import CategorySerializer, SubcategorySerializer
 from products.models import Product
 from products.serializers import ProductListSerializer
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 
 class SubcategoryListView(generics.ListAPIView):
     """GET /api/subcategories/ — all active subcategories (Flutter fetches all at once
@@ -50,7 +50,12 @@ class CategoryProductsView(generics.ListAPIView):
         from products.views import get_optimized_product_queryset
         return get_optimized_product_queryset(qs)
 
-    @extend_schema(summary="List products in category")
+    @extend_schema(
+        summary="List products in category",
+        parameters=[
+            OpenApiParameter(name='paginate', description='Set to true to paginate results', required=False, type=bool),
+        ]
+    )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 

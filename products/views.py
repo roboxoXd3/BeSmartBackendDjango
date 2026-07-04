@@ -57,6 +57,7 @@ class ProductListView(generics.ListAPIView):
         summary="List all products",
         description="Get a list of products with filtering, searching and sorting capabilities.",
         parameters=[
+            OpenApiParameter(name='paginate', description='Set to true to paginate results', required=False, type=bool),
             OpenApiParameter(name='price__gte', description='Minimum price', required=False, type=float),
             OpenApiParameter(name='price__lte', description='Maximum price', required=False, type=float),
         ]
@@ -79,6 +80,15 @@ class FeaturedProductsView(generics.ListAPIView):
         qs = Product.objects.filter(is_featured=True, status='active', approval_status='approved')
         return get_optimized_product_queryset(qs)
 
+    @extend_schema(
+        summary="List featured products",
+        parameters=[
+            OpenApiParameter(name='paginate', description='Set to true to paginate results', required=False, type=bool),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
 class NewArrivalsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = ProductListSerializer
@@ -88,6 +98,15 @@ class NewArrivalsView(generics.ListAPIView):
         qs = Product.objects.filter(is_new_arrival=True, status='active', approval_status='approved').order_by('-added_date')
         return get_optimized_product_queryset(qs)
 
+    @extend_schema(
+        summary="List new arrivals",
+        parameters=[
+            OpenApiParameter(name='paginate', description='Set to true to paginate results', required=False, type=bool),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
 class OnSaleProductsView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = ProductListSerializer
@@ -96,6 +115,15 @@ class OnSaleProductsView(generics.ListAPIView):
     def get_queryset(self):
         qs = Product.objects.filter(is_on_sale=True, status='active', approval_status='approved')
         return get_optimized_product_queryset(qs)
+
+    @extend_schema(
+        summary="List on sale products",
+        parameters=[
+            OpenApiParameter(name='paginate', description='Set to true to paginate results', required=False, type=bool),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
 class ProductSearchView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -107,6 +135,15 @@ class ProductSearchView(generics.ListAPIView):
     def get_queryset(self):
         qs = Product.objects.filter(status='active', approval_status='approved')
         return get_optimized_product_queryset(qs)
+
+    @extend_schema(
+        summary="Search products",
+        parameters=[
+            OpenApiParameter(name='paginate', description='Set to true to paginate results', required=False, type=bool),
+        ]
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
 
 class ProductSizeChartView(views.APIView):
