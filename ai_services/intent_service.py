@@ -3,12 +3,12 @@ Intent Recognition Service — mirrors mobile UjunwaAIService._recognizeIntent()
 Uses OpenAI GPT-4o-mini for intent classification with keyword fallback.
 """
 import json
-import logging
+from besmart_backend.utils.logger import get_logger
 
 from openai import OpenAI
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 INTENT_TYPES = [
     'product_search',

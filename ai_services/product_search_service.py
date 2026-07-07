@@ -11,12 +11,12 @@ Implements:
 
 All queries hit the same Supabase PostgreSQL DB Django is connected to.
 """
-import logging
+from besmart_backend.utils.logger import get_logger
 import uuid as uuid_module
 
 from django.db import connection
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

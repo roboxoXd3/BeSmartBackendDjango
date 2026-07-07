@@ -4,7 +4,6 @@ Exposes UJUNWA chatbot and image search to the Flutter app,
 keeping the OpenAI API key server-side.
 """
 import json
-import logging
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated

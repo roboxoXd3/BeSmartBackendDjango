@@ -5,12 +5,12 @@ and _generateAIResponse().
 Builds prompts with product context, FAQs, specs, and conversation history,
 then calls OpenAI GPT-4o-mini. Static responses for greeting / order / support intents.
 """
-import logging
+from besmart_backend.utils.logger import get_logger
 
 from openai import OpenAI
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------

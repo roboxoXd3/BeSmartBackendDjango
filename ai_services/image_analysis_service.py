@@ -5,13 +5,13 @@ Sends base64 image to OpenAI GPT-4o-mini Vision API and returns a product
 description string suitable for search.
 """
 import base64
-import logging
+from besmart_backend.utils.logger import get_logger
 import time
 
 from openai import OpenAI
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 IMAGE_ANALYSIS_PROMPT = """Analyze this image and describe what product the user is looking for. 
 Focus on:

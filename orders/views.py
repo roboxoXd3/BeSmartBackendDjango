@@ -469,6 +469,8 @@ class OrderStatusUpdateView(views.APIView):
         if new_status == 'delivered' and previous_status != 'delivered':
             points_awarded = self._award_loyalty_points(order)
 
+        logger.info("order_status_updated", user_id=request.user.id, order_id=order.id, previous_status=previous_status, new_status=new_status, points_awarded=points_awarded)
+
         resp = {
             'success': True,
             'order': OrderSerializer(order).data,

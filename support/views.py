@@ -1,4 +1,4 @@
-import logging
+from besmart_backend.utils.logger import get_logger
 import uuid as uuid_module
 
 from rest_framework import generics, permissions, status, views, viewsets, filters
@@ -19,7 +19,7 @@ from vendors.models import Vendor
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class SupportTicketViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]

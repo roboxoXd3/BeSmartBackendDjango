@@ -245,7 +245,7 @@ class PasswordResetView(APIView):
             token = token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             # Just simulating for now to avoid SMTP setup
-            print(f"Password reset link: /reset-password/?uid={uid}&token={token}")
+            logger.info("password_reset_requested", uid=uid, token=token, user_id=user.id)
             
             return Response({"message": "If an account exists, a password reset email has been sent."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
@@ -444,7 +444,7 @@ class ProfilePhotoUploadView(APIView):
                             avatar_storage.delete(old_relative_path)
                 except Exception as ex:
                     # Non-blocking: just log or ignore deletion errors so the upload succeeds
-                    print(f"DEBUG: Failed to delete old avatar {profile.image_path}: {ex}")
+                    logger.warning("avatar_deletion_failed", image_path=profile.image_path, error=str(ex))
             
             # Save the file to storage (Cloudflare R2)
             saved_name = avatar_storage.save(file_name, uploaded_file)

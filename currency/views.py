@@ -12,11 +12,11 @@ from collections import defaultdict
 import threading
 import urllib.request
 import json
-import logging
+from besmart_backend.utils.logger import get_logger
 from django.utils import timezone
 from datetime import timedelta
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 CURRENCY_META = {
     'NGN': {'symbol': '₦', 'name': 'Nigerian Naira'},
