@@ -1,7 +1,8 @@
 import logging
 import uuid as uuid_module
 
-from rest_framework import generics, permissions, status, views, viewsets
+from rest_framework import generics, permissions, status, views, viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -23,6 +24,9 @@ logger = logging.getLogger(__name__)
 class SupportTicketViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = SupportTicketSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['status', 'priority']
+    search_fields = ['subject', 'description']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
