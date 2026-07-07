@@ -409,3 +409,19 @@ structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
+
+# ---------------------------------------------------------------------
+# OPENTELEMETRY TRACING INITIALIZATION
+# ---------------------------------------------------------------------
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.instrumentation.django import DjangoInstrumentor
+    
+    # If the provider is a ProxyTracerProvider (default unconfigured), set a real one
+    if type(trace.get_tracer_provider()).__name__ == 'ProxyTracerProvider':
+        trace.set_tracer_provider(TracerProvider())
+        
+    DjangoInstrumentor().instrument()
+except ImportError:
+    pass
