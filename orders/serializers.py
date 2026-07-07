@@ -138,3 +138,21 @@ class CreateOrderSerializer(serializers.Serializer):
     escrow_status = serializers.CharField(required=False, allow_blank=True)
     # Gap 27: Direct items list (alternative to cart-based flow)
     items = OrderItemInputSerializer(many=True, required=False)
+
+class VendorOrderSerializer(OrderSerializer):
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+
+    class Meta(OrderSerializer.Meta):
+        pass
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_name(self, obj):
+        if obj.user:
+            name = f"{obj.user.first_name} {obj.user.last_name}".strip()
+            return name if name else obj.user.email
+        return ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_customer_email(self, obj):
+        return obj.user.email if obj.user else ""

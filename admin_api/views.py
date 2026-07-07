@@ -11,10 +11,15 @@ from .serializers import (
     VendorAdminSerializer, PayoutAdminSerializer,
     TransactionAdminSerializer, OrderAdminSerializer,
     CategoryAdminSerializer, SubcategoryAdminSerializer,
-    LoyaltyPointsAdminSerializer, LoyaltyTransactionAdminSerializer,
-    AdminSessionSerializer
+    AdminSessionSerializer, EscrowAdminSerializer,
+    SupportTicketAdminSerializer, SupportMessageAdminSerializer,
+    VendorBankAccountAdminSerializer
 )
-from content.models import PromotionalBanner
+from content.models import PromotionalBanner, HeroSection, ContactInfo, SupportInfo
+from content.serializers import (
+    PromotionalBannerSerializer, HeroSectionSerializer,
+    ContactInfoSerializer, SupportInfoSerializer
+)
 from django.core.files.storage import default_storage
 from rest_framework.parsers import MultiPartParser, FormParser
 from categories.models import Category, Subcategory
@@ -277,35 +282,64 @@ class AdminRevenueChartView(views.APIView):
     
     @extend_schema(
         summary="Time series revenue for admin dashboard",
-        parameters=[OpenApiParameter("period", OpenApiTypes.STR, description="E.g., 7d, 30d, 90d, 1y")],
+        parameters=[
+            OpenApiParameter("period", OpenApiTypes.STR, description="E.g., 7d, 30d, 90d, 1y"),
+            OpenApiParameter("start_date", OpenApiTypes.DATE, description="Custom start date (YYYY-MM-DD)"),
+            OpenApiParameter("end_date", OpenApiTypes.DATE, description="Custom end date (YYYY-MM-DD)"),
+            OpenApiParameter("vendor_id", OpenApiTypes.UUID, description="Filter by vendor"),
+        ],
         responses={200: inline_serializer(
             name="AdminRevenueChartResponse",
             fields={
                 "trend": serializers.ListField(child=serializers.DictField()),
-                "period": serializers.CharField()
+                "category_breakdown": serializers.ListField(child=serializers.DictField()),
+                "period": serializers.CharField(),
+                "start_date": serializers.CharField(),
+                "end_date": serializers.CharField(),
+                "total_revenue": serializers.FloatField(),
+                "total_orders": serializers.IntegerField()
             }
         )}
     )
     def get(self, request):
         period = request.query_params.get('period', '30d')
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        vendor_id = request.query_params.get('vendor_id')
+        
         from django.core.cache import cache
-        cache_key = f'admin_revenue_chart_{period}'
+        cache_key = f'admin_revenue_chart_{period}_{start_date_str}_{end_date_str}_{vendor_id}'
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response(cached_data)
 
         from django.utils import timezone
-        from datetime import timedelta
+        from datetime import timedelta, datetime
         from django.db.models.functions import TruncDate
-        from django.db.models import Sum, Count
+        from django.db.models import Sum, Count, F
         
-        days = 30
-        if period == '7d': days = 7
-        elif period == '90d': days = 90
-        elif period == '1y': days = 365
+        end_date = timezone.now()
+        if end_date_str:
+            try:
+                end_date = timezone.make_aware(datetime.strptime(end_date_str, "%Y-%m-%d"))
+            except ValueError:
+                pass
+
+        if start_date_str:
+            try:
+                start_date = timezone.make_aware(datetime.strptime(start_date_str, "%Y-%m-%d"))
+            except ValueError:
+                start_date = end_date - timedelta(days=30)
+        else:
+            days = 30
+            if period == '7d': days = 7
+            elif period == '90d': days = 90
+            elif period == '1y': days = 365
+            start_date = end_date - timedelta(days=days)
         
-        start_date = timezone.now() - timedelta(days=days)
-        orders = Order.objects.filter(created_at__gte=start_date, status__in=['delivered', 'shipped', 'confirmed'])
+        orders = Order.objects.filter(created_at__gte=start_date, created_at__lte=end_date, status__in=['delivered', 'shipped', 'confirmed'])
+        if vendor_id:
+            orders = orders.filter(order_items__product__vendor_id=vendor_id).distinct()
         
         daily_sales = list(orders
             .annotate(date=TruncDate('created_at'))
@@ -318,9 +352,23 @@ class AdminRevenueChartView(views.APIView):
             for entry in daily_sales
         ]
         
+        category_breakdown = list(orders.values(cat_name=F('order_items__product__category__name'))
+                                  .annotate(revenue=Sum('order_items__subtotal'))
+                                  .order_by('-revenue'))
+        
+        formatted_category_breakdown = [
+            {"category": entry["cat_name"] or "Unknown", "revenue": float(entry["revenue"] or 0)}
+            for entry in category_breakdown
+        ]
+        
         resp_data = {
             "trend": formatted_daily_sales,
-            "period": period
+            "category_breakdown": formatted_category_breakdown,
+            "period": period,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "total_revenue": sum(d['revenue'] for d in formatted_daily_sales),
+            "total_orders": sum(d['orders'] for d in formatted_daily_sales)
         }
         cache.set(cache_key, resp_data, timeout=300) # Cache for 5 mins
         return Response(resp_data)
@@ -425,6 +473,7 @@ class OrderAdminFilter(django_filters.FilterSet):
     minAmount = django_filters.NumberFilter(field_name='total', lookup_expr='gte')
     maxAmount = django_filters.NumberFilter(field_name='total', lookup_expr='lte')
     vendorId = django_filters.UUIDFilter(field_name='order_items__product__vendor_id')
+    user_id = django_filters.UUIDFilter(field_name='user_id')
 
     class Meta:
         model = Order
@@ -460,6 +509,29 @@ class OrderAdminViewSet(viewsets.ModelViewSet):
             logger.info("admin_updated_order_status", admin_id=request.user.id, order_id=order.id, new_status=new_status)
             return Response({'status': 'order status updated', 'order_status': order.status})
         return Response({'error': 'missing status'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Get order summary for a user",
+        parameters=[OpenApiParameter("user_id", OpenApiTypes.UUID, description="User ID")],
+        responses={200: inline_serializer(
+            name="UserOrderSummaryResponse",
+            fields={"orders_count": serializers.IntegerField(), "total_spent": serializers.FloatField()}
+        )}
+    )
+    @action(detail=False, methods=['get'], url_path='user-summary')
+    def user_summary(self, request):
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        orders = self.get_queryset().filter(user_id=user_id)
+        from django.db.models import Sum, Count
+        aggs = orders.aggregate(count=Count('id'), total=Sum('total'))
+        
+        return Response({
+            'orders_count': aggs['count'] or 0,
+            'total_spent': float(aggs['total'] or 0.0)
+        })
 
 class PayoutAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
@@ -501,10 +573,159 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
         logger.info("admin_updated_payout_status", admin_id=request.user.id, payout_id=payout.id, new_status=new_status)
         return Response({'status': 'payout updated', 'payout_status': payout.status})
 
+    @extend_schema(
+        summary="Trigger explicit Squad transfer for a payout",
+        request=inline_serializer(
+            name="PayoutProcessAdminRequest",
+            fields={"admin_notes": serializers.CharField(required=False, allow_blank=True)}
+        ),
+        responses={200: inline_serializer(
+            name="PayoutProcessAdminResponse",
+            fields={"status": serializers.CharField(), "message": serializers.CharField()}
+        )}
+    )
+    @action(detail=True, methods=['post'], url_path='process-transfer')
+    def process_transfer(self, request, pk=None):
+        payout = self.get_object()
+        
+        if payout.status in ['completed', 'processing']:
+            return Response({'error': f'Payout is already {payout.status}'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        bank_account = payout.vendor.bank_accounts.filter(is_primary=True).first()
+        if not bank_account:
+            bank_account = payout.vendor.bank_accounts.first()
+            
+        if not bank_account:
+            return Response({'error': 'Vendor has no configured bank accounts'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from payments.services.squad_service import SquadTransferService
+        import uuid
+        
+        transfer_svc = SquadTransferService()
+        ref = f"PAY-{str(payout.id)[:8]}-{uuid.uuid4().hex[:8]}"
+        
+        result = transfer_svc.initiate_transfer(
+            transaction_ref=ref,
+            amount=payout.amount,
+            bank_code=bank_account.bank_code,
+            account_number=bank_account.account_number,
+            account_name=bank_account.account_name,
+            remark=f"Payout for {payout.vendor.business_name}"
+        )
+        
+        if result.get('success'):
+            from django.utils import timezone
+            payout.status = 'processing'
+            payout.processed_at = timezone.now()
+            if 'admin_notes' in request.data:
+                payout.admin_notes = request.data['admin_notes']
+            payout.save()
+            
+            from vendors.models import PayoutTransaction
+            PayoutTransaction.objects.create(
+                payout=payout,
+                vendor=payout.vendor,
+                amount=payout.amount,
+                transaction_type='payout',
+                reference_id=ref,
+                gateway='squad',
+                status='pending',
+                description='Squad transfer initiated'
+            )
+            
+            logger.info("admin_initiated_squad_transfer", admin_id=request.user.id, payout_id=payout.id, ref=ref)
+            return Response({'status': 'processing', 'message': 'Transfer initiated successfully'})
+        else:
+            logger.error("admin_squad_transfer_failed", admin_id=request.user.id, payout_id=payout.id, error=result.get('message'))
+            return Response({'error': result.get('message', 'Transfer failed')}, status=status.HTTP_400_BAD_REQUEST)
+
 class TransactionAdminViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = PayoutTransaction.objects.all().order_by('-created_at')
     serializer_class = TransactionAdminSerializer
+
+class EscrowAdminFilter(django_filters.FilterSet):
+    class Meta:
+        model = EscrowTransaction
+        fields = ['status', 'vendor_id', 'order_id']
+
+class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = EscrowTransaction.objects.all().order_by('-created_at')
+    serializer_class = EscrowAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = EscrowAdminFilter
+    search_fields = ['reference_id', 'vendor__business_name']
+    ordering_fields = ['created_at', 'amount']
+
+from support.models import SupportTicket
+
+class SupportTicketAdminFilter(django_filters.FilterSet):
+    class Meta:
+        model = SupportTicket
+        fields = ['status', 'priority', 'vendor_id', 'user_id', 'assigned_to', 'resolved_by']
+
+class SupportTicketAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = SupportTicket.objects.select_related('vendor', 'user', 'assigned_to', 'resolved_by').prefetch_related('messages').all().order_by('-created_at')
+    serializer_class = SupportTicketAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = SupportTicketAdminFilter
+    search_fields = ['subject', 'vendor__business_name', 'user__email']
+    ordering_fields = ['created_at', 'updated_at', 'status']
+    
+    @extend_schema(
+        summary="Reply to a support ticket",
+        request=inline_serializer(
+            name="SupportTicketReplyAdminRequest",
+            fields={"message": serializers.CharField()}
+        ),
+        responses={200: SupportMessageAdminSerializer}
+    )
+    @action(detail=True, methods=['post'])
+    def reply(self, request, pk=None):
+        ticket = self.get_object()
+        message_text = request.data.get('message')
+        if not message_text:
+            return Response({'error': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        from support.models import SupportMessage
+        message = SupportMessage.objects.create(
+            ticket=ticket,
+            sender=request.user,
+            sender_role='admin',
+            message=message_text
+        )
+        
+        # Extract AdminUser instance for assigned_to
+        try:
+            admin_user = AdminUser.objects.get(user=request.user)
+            if not ticket.assigned_to:
+                ticket.assigned_to = admin_user
+        except AdminUser.DoesNotExist:
+            pass
+            
+        if ticket.status == 'open':
+            ticket.status = 'in_progress'
+        ticket.save()
+        
+        return Response(SupportMessageAdminSerializer(message).data)
+
+from vendors.models import VendorBankAccount
+
+class VendorBankAccountAdminFilter(django_filters.FilterSet):
+    class Meta:
+        model = VendorBankAccount
+        fields = ['vendor_id', 'is_default']
+
+class VendorBankAccountAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = VendorBankAccount.objects.select_related('vendor').all().order_by('-created_at')
+    serializer_class = VendorBankAccountAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = VendorBankAccountAdminFilter
+    search_fields = ['vendor__business_name', 'account_name', 'account_number', 'bank_name']
+    ordering_fields = ['created_at', 'vendor__business_name']
 
 class CategoryAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
@@ -513,6 +734,39 @@ class CategoryAdminViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'created_at']
+
+class HeroSectionAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = HeroSection.objects.all().order_by('-id')
+    serializer_class = HeroSectionSerializer
+
+class ContactInfoAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = ContactInfo.objects.all().order_by('-id')
+    serializer_class = ContactInfoSerializer
+
+class PromotionalBannerAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = PromotionalBanner.objects.all().order_by('priority')
+    serializer_class = PromotionalBannerSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['title', 'subtitle', 'link_url']
+
+    def perform_create(self, serializer):
+        try:
+            admin_user = AdminUser.objects.get(user=self.request.user)
+            serializer.save(created_by=admin_user)
+        except AdminUser.DoesNotExist:
+            serializer.save()
+
+class SupportInfoAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = SupportInfo.objects.all().order_by('order_index')
+    serializer_class = SupportInfoSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['type']
+    search_fields = ['title', 'subtitle']
 
 class SubcategoryAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
@@ -848,3 +1102,48 @@ class AdminVersionUpdateView(views.APIView):
             urls_setting.save()
             
         return self.get(request)
+
+class AdminCategoryImageUploadView(views.APIView):
+    """POST /api/admin/categories/{id}/images/ and DELETE /api/admin/categories/{id}/images/"""
+    permission_classes = [IsAdminUser]
+    from rest_framework.parsers import JSONParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @extend_schema(
+        summary="Upload category image (Admin)",
+        request=inline_serializer("AdminCategoryImageUploadReq", {"image": serializers.ImageField()}),
+        responses={200: inline_serializer("AdminCategoryImageUploadResp", {"status": serializers.CharField(), "image_url": serializers.CharField()})}
+    )
+    def post(self, request, id):
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        category = get_object_or_404(Category, id=id)
+        path = f"category-images/{category.id}/{image_file.name}"
+        saved_path = default_storage.save(path, image_file)
+        image_url = default_storage.url(saved_path)
+
+        category.image_url = image_url
+        category.save(update_fields=['image_url'])
+
+        logger.info("admin_uploaded_category_image", admin_id=request.user.id, category_id=category.id)
+        return Response({'status': 'uploaded', 'image_url': image_url})
+
+    @extend_schema(
+        summary="Delete category image (Admin)",
+        request=inline_serializer("AdminCategoryImageDeleteReq", {"image_url": serializers.CharField()}),
+        responses={200: inline_serializer("AdminCategoryImageDeleteResp", {"status": serializers.CharField()})}
+    )
+    def delete(self, request, id):
+        image_url = request.data.get('image_url')
+        if not image_url:
+            return Response({'error': 'image_url required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        category = get_object_or_404(Category, id=id)
+        if category.image_url == image_url:
+            category.image_url = None
+            category.save(update_fields=['image_url'])
+            logger.info("admin_deleted_category_image", admin_id=request.user.id, category_id=category.id)
+            return Response({'status': 'deleted'})
+        return Response({'error': 'Image not found in category'}, status=status.HTTP_404_NOT_FOUND)

@@ -41,22 +41,39 @@ class AppSettingsSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'updated_by']
 
 class UserManagementSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
     # Serializer for Admin to manage generic Users
     class Meta:
         model = User
-        fields = ['id', 'email', 'is_active', 'date_joined']
+        fields = ['id', 'email', 'is_active', 'date_joined', 'profile']
         read_only_fields = ['id', 'date_joined', 'email']
+
+    def get_profile(self, obj):
+        try:
+            profile = obj.profile
+            return {
+                "full_name": profile.full_name,
+                "phone_number": profile.phone_number,
+                "role": profile.role,
+                "image_path": profile.image_path
+            }
+        except Exception:
+            return None
 
 class UserAdminCreateUpdateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    role = serializers.ChoiceField(choices=[('customer', 'Customer'), ('vendor', 'Vendor'), ('admin', 'Admin')], write_only=True, required=False)
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'password', 'is_active', 'first_name', 'last_name']
+        fields = ['id', 'email', 'password', 'is_active', 'first_name', 'last_name', 'phone_number', 'role']
         read_only_fields = ['id']
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
+        phone_number = validated_data.pop('phone_number', None)
+        role = validated_data.pop('role', 'customer')
         if 'username' not in validated_data and 'email' in validated_data:
             validated_data['username'] = validated_data['email']
         user = User(**validated_data)
@@ -65,15 +82,38 @@ class UserAdminCreateUpdateSerializer(serializers.ModelSerializer):
         else:
             user.set_unusable_password()
         user.save()
+
+        # Profile creation/update
+        from users.models import Profile
+        Profile.objects.update_or_create(id=user, defaults={
+            'phone_number': phone_number,
+            'role': role,
+            'full_name': f"{user.first_name} {user.last_name}".strip()
+        })
+        
         return user
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
+        phone_number = validated_data.pop('phone_number', None)
+        role = validated_data.pop('role', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         if password:
             instance.set_password(password)
         instance.save()
+
+        # Profile update
+        if phone_number is not None or role is not None:
+            from users.models import Profile
+            profile, _ = Profile.objects.get_or_create(id=instance)
+            if phone_number is not None:
+                profile.phone_number = phone_number
+            if role is not None:
+                profile.role = role
+            profile.full_name = f"{instance.first_name} {instance.last_name}".strip()
+            profile.save()
+
         return instance
 
 class VendorAdminSerializer(serializers.ModelSerializer):
@@ -101,15 +141,71 @@ class VendorAdminSerializer(serializers.ModelSerializer):
 
 class PayoutAdminSerializer(serializers.ModelSerializer):
     vendor_business_name = serializers.CharField(source='vendor.business_name', read_only=True)
+    vendor_email = serializers.CharField(source='vendor.user.email', read_only=True)
+    vendor_logo = serializers.CharField(source='vendor.business_logo', read_only=True)
+    bank_details = serializers.SerializerMethodField()
     
     class Meta:
         model = VendorPayout
         fields = '__all__'
 
+    def get_bank_details(self, obj):
+        try:
+            from vendors.models import VendorBankAccount
+            bank = VendorBankAccount.objects.filter(vendor=obj.vendor).first()
+            if bank:
+                return {
+                    "bank_name": bank.bank_name,
+                    "account_name": bank.account_name,
+                    "account_number": bank.account_number,
+                    "bank_code": bank.bank_code
+                }
+        except Exception:
+            pass
+        return None
+
 class TransactionAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayoutTransaction
         fields = '__all__'
+
+class EscrowAdminSerializer(serializers.ModelSerializer):
+    vendor_business_name = serializers.CharField(source='vendor.business_name', read_only=True)
+    
+    class Meta:
+        from vendors.models import EscrowTransaction
+        model = EscrowTransaction
+        fields = '__all__'
+
+class VendorBankAccountAdminSerializer(serializers.ModelSerializer):
+    vendor_business_name = serializers.CharField(source='vendor.business_name', read_only=True)
+
+    class Meta:
+        from vendors.models import VendorBankAccount
+        model = VendorBankAccount
+        fields = '__all__'
+
+class SupportTicketAdminSerializer(serializers.ModelSerializer):
+    vendor_business_name = serializers.CharField(source='vendor.business_name', read_only=True)
+    messages = serializers.SerializerMethodField()
+    assigned_to_details = AdminUserSerializer(source='assigned_to', read_only=True)
+    resolved_by_details = AdminUserSerializer(source='resolved_by', read_only=True)
+
+    class Meta:
+        from support.models import SupportTicket
+        model = SupportTicket
+        fields = '__all__'
+
+    def get_messages(self, obj):
+        from support.serializers import SupportMessageSerializer
+        return SupportMessageSerializer(obj.messages.all().order_by('created_at'), many=True).data
+
+class SupportMessageAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        from support.models import SupportMessage
+        model = SupportMessage
+        fields = '__all__'
+        read_only_fields = ['created_at', 'sender', 'sender_role']
 
 class OrderAdminSerializer(OrderSerializer):
     customer = serializers.SerializerMethodField()
@@ -150,7 +246,7 @@ class OrderAdminSerializer(OrderSerializer):
                 {
                     "id": v.id,
                     "business_name": v.business_name,
-                    "logo_url": v.logo_url if hasattr(v, 'logo_url') else None
+                    "logo_url": v.business_logo
                 } for v in vendors
             ]
         except Exception as e:

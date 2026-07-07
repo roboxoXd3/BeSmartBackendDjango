@@ -4,6 +4,7 @@ from .models import Product, ProductReview, ProductQuestion
 class ProductListSerializer(serializers.ModelSerializer):
     ratings = serializers.FloatField(source='rating', read_only=True)
     category = serializers.SerializerMethodField()
+    vendor_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -14,7 +15,20 @@ class ProductListSerializer(serializers.ModelSerializer):
             'sku', 'status', 'stock_quantity',
             'category_id', 'subcategory_id', 'category',
             'sizes', 'base_currency', 'cod_allowed',
+            'description', 'approval_status', 'rejection_reason',
+            'video_url', 'colors', 'subtitle', 'brand',
+            'vendor_id', 'vendor_name', 'mrp', 'currency', 'created_at',
         ]
+        
+    def get_vendor_name(self, obj):
+        if not obj.vendor_id:
+            return None
+        from vendors.models import Vendor
+        try:
+            vendor = Vendor.objects.get(id=obj.vendor_id)
+            return vendor.business_name
+        except Vendor.DoesNotExist:
+            return None
         
     def get_category(self, obj):
         if hasattr(obj, 'category_name'):
@@ -32,6 +46,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = '__all__'
+        read_only_fields = ['approval_status', 'vendor_id']
 
 
 class ProductReviewSerializer(serializers.ModelSerializer):
