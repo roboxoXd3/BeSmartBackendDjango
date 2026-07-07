@@ -99,6 +99,7 @@ class UserAdminViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['patch'])
     def status(self, request, pk=None):
+        logger.info("admin_user_status_update_started", admin_id=request.user.id, target_user_id=pk)
         user = self.get_object()
         action_type = request.data.get('action')
         if action_type == 'suspend':
@@ -137,6 +138,7 @@ class VendorAdminViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['patch'])
     def status(self, request, pk=None):
+        logger.info("admin_vendor_status_update_started", admin_id=request.user.id, target_vendor_id=pk)
         vendor = self.get_object()
         new_status = request.data.get('status')
         # Map 'notes' to 'admin_notes' if provided (frontend compatibility)
@@ -562,6 +564,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['patch'])
     def status(self, request, pk=None):
+        logger.info("admin_payout_status_update_started", admin_id=request.user.id, target_payout_id=pk)
         payout = self.get_object()
         new_status = request.data.get('status')
         admin_notes = request.data.get('admin_notes')
@@ -594,6 +597,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['post'], url_path='process-transfer')
     def process_transfer(self, request, pk=None):
+        logger.info("admin_payout_transfer_started", admin_id=request.user.id, target_payout_id=pk)
         payout = self.get_object()
         
         if payout.status in ['completed', 'processing']:

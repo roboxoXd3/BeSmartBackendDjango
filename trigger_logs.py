@@ -65,6 +65,20 @@ def run_scenario():
     print("Hitting POST /api/payments/initiate/")
     res = requests.post(f"{BASE_URL}/api/payments/initiate/", headers=headers, json={"order_id": "00000000-0000-0000-0000-000000000000"})
     print(res.status_code)
+    # 8. AI Chat endpoint
+    print("Hitting POST /api/ai/chat/")
+    res = requests.post(f"{BASE_URL}/api/ai/chat/", headers=headers, json={"message": "I need some comfortable running shoes"})
+    print(res.status_code)
+
+    # 9. Vendor Registration
+    print("Hitting POST /api/vendors/register/")
+    res = requests.post(f"{BASE_URL}/api/vendors/register/", headers=headers, json={
+        "business_name": f"Test Business {random.randint(1000, 9999)}",
+        "business_email": f"test.vendor.{random.randint(1000, 9999)}@example.com",
+        "business_phone": "+2347000000000",
+        "description": "Test vendor for logs"
+    })
+    print(res.status_code)
     
     print("--- Finished generating logs! ---")
 

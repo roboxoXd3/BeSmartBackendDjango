@@ -299,10 +299,13 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     @extend_schema(summary="Update current user profile")
     def patch(self, request, *args, **kwargs):
+        logger.info("profile_update_started", user_id=request.user.id)
         instance = self.request.user.profile
         serializer = ProfileSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        
+        logger.info("profile_updated", user_id=request.user.id)
         
         user_serializer = UserSerializer(self.request.user)
         return Response(user_serializer.data)
@@ -345,11 +348,13 @@ class AccountDeleteView(APIView):
     def post(self, request):
         from vendors.models import Vendor
         password = request.data.get('password', '')
+        logger.info("account_deletion_started", user_id=request.user.id)
         if not password:
             return Response({"success": False, "error": "invalid_password", "message": "Password is required."}, status=status.HTTP_400_BAD_REQUEST)
             
         vendor = Vendor.objects.filter(user=request.user, status='approved').first()
         if vendor:
+            logger.warning("account_deletion_rejected", user_id=request.user.id, reason="vendor_active", vendor_id=vendor.id)
             return Response({"success": False, "error": "vendor_active", "message": "Cannot delete account with active vendor."}, status=status.HTTP_400_BAD_REQUEST)
             
         # Verify password natively
@@ -408,6 +413,7 @@ class ProfilePhotoUploadView(APIView):
         }
     )
     def post(self, request):
+        logger.info("profile_photo_upload_started", user_id=request.user.id)
         serializer = ProfilePhotoUploadSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

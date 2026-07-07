@@ -153,6 +153,8 @@ class ProductViewTrackView(views.APIView):
     )
     def post(self, request, id):
         product = get_object_or_404(Product, id=id, status='active', approval_status='approved')
+        user_id = request.user.id if request.user.is_authenticated else None
+        logger.info("product_view_tracking_started", product_id=id, user_id=user_id)
         try:
             with connection.cursor() as c:
                 c.execute("""
@@ -190,6 +192,7 @@ class ProductReviewsListCreateView(generics.ListCreateAPIView):
         if ProductReview.objects.filter(product=product, user=self.request.user).exists():
             from rest_framework.exceptions import ValidationError
             raise ValidationError({"detail": "You have already reviewed this product."})
+        logger.info("product_review_started", product_id=product.id, user_id=self.request.user.id)
         d = serializer.validated_data
         self.created_review = ProductReview.objects.create(
             product=product, user=self.request.user, order_id=d.get('order_id'),
@@ -316,6 +319,7 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         product = get_object_or_404(Product, id=self.kwargs['id'], status='active', approval_status='approved')
+        logger.info("product_qa_started", product_id=product.id, user_id=self.request.user.id)
         d = serializer.validated_data
         self.created_qa = ProductQuestion.objects.create(
             product=product, user=self.request.user, question=d['question']
@@ -467,6 +471,7 @@ class ImageSearchView(views.APIView):
 
         # Read image bytes
         image_bytes = image_file.read()
+        logger.info("product_image_search_started", user_id=request.user.id)
 
         # Analyze image
         from ai_services.image_analysis_service import analyze_image
@@ -502,6 +507,8 @@ class ImageSearchView(views.APIView):
                 'status': p.get('status', 'active'),
                 'colors': p.get('colors', {}),
             })
+            
+        logger.info("product_image_search_completed", user_id=request.user.id, results_count=len(serialized))
 
         return Response({
             'description': description,

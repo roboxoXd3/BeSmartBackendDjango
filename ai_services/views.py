@@ -34,6 +34,8 @@ def chat(request):
         return Response({'error': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
 
     conversation_context = request.data.get('conversation_context', [])
+    
+    logger.info("ai_chat_started", user_id=request.user.id)
 
     try:
         # Step 1: Classify intent
@@ -45,8 +47,10 @@ def chat(request):
         if intent.get('intent') in ('product_search', 'product_info', 'recommendation', 'comparison'):
             entities = intent.get('entities', [])
             query = ' '.join(entities) if entities else user_message
+            logger.info('ai_search_query_parsed', user_id=request.user.id, query=query)
             raw_products = product_search_service.hybrid_search(query, limit=20)
             products = product_search_service.enrich_products(raw_products)
+            logger.info('ai_search_completed', user_id=request.user.id, results_count=len(products))
 
         # Step 3: Fetch relevant FAQs
         faqs = product_search_service.get_relevant_faqs(user_message, limit=3)
@@ -95,6 +99,8 @@ def analyze_image(request):
     image_file = request.FILES.get('image')
     if not image_file:
         return Response({'error': 'image file is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    logger.info("ai_image_analysis_started", user_id=request.user.id)
 
     try:
         image_bytes = image_file.read()
@@ -105,9 +111,11 @@ def analyze_image(request):
         logger.info('ai_image_analyzed', user_id=request.user.id, description=description)
 
         # Step 2: Search products based on description
+        logger.info('ai_image_search_started', user_id=request.user.id)
         raw_products = product_search_service.search_by_image_description(description, limit=20)
         products = product_search_service.enrich_products(raw_products)
         serialized_products = [_serialize_product(p) for p in products[:8]]
+        logger.info('ai_image_search_completed', user_id=request.user.id, results_count=len(products))
 
         return Response({
             'description': description,
