@@ -30,7 +30,8 @@ class SquadPaymentService:
         transaction_ref: str,
         currency: str = 'NGN',
         callback_url: Optional[str] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        is_recurring: bool = False
     ) -> Dict:
         """
         Initiate payment with Squad
@@ -58,6 +59,7 @@ class SquadPaymentService:
             'initiate_type': 'inline',
             'transaction_ref': transaction_ref,
             'callback_url': callback_url or settings.PAYMENT_CONFIG['CALLBACK_URL'],
+            'is_recurring': is_recurring
         }
         
         if metadata:
@@ -109,6 +111,40 @@ class SquadPaymentService:
         ).hexdigest()
         
         return hmac.compare_digest(computed_signature, signature)
+
+    def charge_card_with_token(
+        self,
+        amount: Decimal,
+        token_id: str,
+        transaction_ref: str
+    ) -> Dict:
+        """
+        Charge a tokenized card
+        
+        Args:
+            amount: Payment amount in naira (will be converted to kobo)
+            token_id: Squad token ID
+            transaction_ref: Unique transaction reference
+            
+        Returns:
+            Dict containing transaction details
+        """
+        url = f"{self.base_url}/transaction/charge_card"
+        
+        amount_in_kobo = int(amount * 100)
+        
+        payload = {
+            'amount': amount_in_kobo,
+            'token_id': token_id,
+            'transaction_ref': transaction_ref
+        }
+        
+        try:
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Squad Token Charge Error: {str(e)}")
 
 
 class SquadTransferService:

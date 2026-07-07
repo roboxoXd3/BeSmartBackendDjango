@@ -16,6 +16,7 @@ class PaymentMethod(models.Model):
     cvv = models.DecimalField(max_digits=4, decimal_places=0, null=True, blank=True) # Usually not stored
     is_default = models.BooleanField(default=False)
     razorpay_card_token = models.TextField(null=True, blank=True) # Legacy or specific gateway
+    squad_token = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

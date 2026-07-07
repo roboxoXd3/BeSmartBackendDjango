@@ -234,7 +234,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'besmart_backend.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
@@ -297,9 +297,23 @@ if RAILWAY_PUBLIC_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RAILWAY_PUBLIC_DOMAIN}")
 CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
 
+# Ensure HTTPS in DRF pagination links when behind a proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Squad Payment Gateway
 SQUAD_SECRET_KEY = os.environ.get('SQUAD_PRIVATE_KEY', os.environ.get('SQUAD_SECRET_KEY', ''))
 SQUAD_BASE_URL = os.environ.get('SQUAD_BASE_URL', 'https://api-d.squadco.com')
+
+SQUAD_CONFIG = {
+    'SECRET_KEY': SQUAD_SECRET_KEY,
+    'PUBLIC_KEY': os.environ.get('SQUAD_PUBLIC_KEY', ''),
+    'BASE_URL': SQUAD_BASE_URL,
+    'WEBHOOK_SECRET': os.environ.get('SQUAD_WEBHOOK_HASH', ''),
+}
+
+PAYMENT_CONFIG = {
+    'CALLBACK_URL': os.environ.get('PAYMENT_CALLBACK_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000') + '/payment/callback'),
+}
 
 # ---------------------------------------------------------------------
 # OBSERVABILITY & LOGGING CONFIGURATION
