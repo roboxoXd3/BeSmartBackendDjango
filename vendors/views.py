@@ -62,6 +62,7 @@ class VendorSearchView(generics.ListAPIView):
     serializer_class = VendorListSerializer
 
     def get_queryset(self):
+        from django.db.models import Q
         q = self.request.query_params.get('q', '').strip()
         qs = _approved_vendors()
         if q:
@@ -487,7 +488,8 @@ class VendorAnalyticsSalesView(views.APIView):
         from django.utils import timezone
         from datetime import timedelta
         from django.db.models.functions import TruncDate
-        
+        from django.db.models import Sum, Count
+
         days = 30
         if period == '7d': days = 7
         elif period == '90d': days = 90
@@ -1059,7 +1061,8 @@ class VendorPayoutSummaryView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
-        
+        from django.db.models import Sum
+
         released = EscrowTransaction.objects.filter(
             vendor=vendor, status='released'
         ).aggregate(total=Sum('amount'))['total'] or 0.00
@@ -1087,6 +1090,7 @@ class VendorProductReviewViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductReviewSerializer
     
     def get_queryset(self):
+        from django.db.models import Q
         if getattr(self, 'swagger_fake_view', False):
             return ProductReview.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
@@ -1135,6 +1139,7 @@ class VendorProductQAViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductQuestionSerializer
 
     def get_queryset(self):
+        from django.db.models import Q
         if getattr(self, 'swagger_fake_view', False):
             return ProductQuestion.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
