@@ -46,7 +46,9 @@ class TracingMiddleware(MiddlewareMixin):
             
         # Log the completed HTTP request with the context variables
         logger.info(
-            f"{request.method} {request.path}",
+            "http_request_completed",
+            request_path=request.path,
+            request_method=request.method,
             status_code=response.status_code,
             user_id=user_id,
         )

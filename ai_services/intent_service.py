@@ -54,7 +54,7 @@ def recognize_intent(message: str) -> dict:
     try:
         return _recognize_with_ai(message)
     except Exception as e:
-        logger.warning('AI intent recognition failed, using keyword fallback: %s', e)
+        logger.warning('ai_intent_recognition_failed', reason='using_keyword_fallback', error=str(e))
         return _recognize_with_keywords(message)
 
 

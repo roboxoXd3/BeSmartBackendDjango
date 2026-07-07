@@ -64,11 +64,11 @@ def analyze_image(image_bytes: bytes, content_type: str = 'image/jpeg') -> str:
                 temperature=0.3,
             )
             description = response.choices[0].message.content.strip()
-            logger.info('Image analysis result: %s', description)
+            logger.info('image_analysis_success', description=description)
             return description
 
         except Exception as e:
-            logger.warning('Image analysis attempt %d/%d failed: %s', attempt, MAX_RETRIES, e)
+            logger.warning('image_analysis_attempt_failed', attempt=attempt, max_retries=MAX_RETRIES, error=str(e))
             if attempt < MAX_RETRIES:
                 time.sleep(1 * attempt)  # exponential backoff
 

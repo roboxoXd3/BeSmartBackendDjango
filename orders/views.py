@@ -285,6 +285,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
                     'selected_color': item_data.get('selected_color', ''),
                 })
             if not order_products:
+                logger.warning("order_creation_failed", user_id=request.user.id, reason="no_valid_items")
                 return Response({"error": "No valid items provided"}, status=status.HTTP_400_BAD_REQUEST)
             subtotal = sum(p['quantity'] * p['price'] for p in order_products)
         else:
@@ -292,6 +293,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
             cart, _ = Cart.objects.get_or_create(user=request.user)
             cart_items = list(cart.items.select_related('product').all())
             if not cart_items:
+                logger.warning("order_creation_failed", user_id=request.user.id, reason="empty_cart")
                 return Response({"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
             subtotal = sum(item.quantity * item.product.price for item in cart_items)
             order_products = None  # Marker for cart-based

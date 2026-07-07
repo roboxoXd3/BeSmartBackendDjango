@@ -245,7 +245,7 @@ class PasswordResetView(APIView):
             token = token_generator.make_token(user)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             # Just simulating for now to avoid SMTP setup
-            logger.info("password_reset_requested", uid=uid, token=token, user_id=user.id)
+            logger.info("password_reset_requested", user_id=user.id)
             
             return Response({"message": "If an account exists, a password reset email has been sent."}, status=status.HTTP_200_OK)
         except User.DoesNotExist:

@@ -42,13 +42,13 @@ def fetch_and_update_rates():
     Called in a background thread — must not raise into the caller.
     """
     try:
-        logger.info('Currency update: fetching rates from %s', _API_URL)
+        logger.info('currency_update_started', api_url=_API_URL)
         req = urllib.request.Request(_API_URL, headers={'User-Agent': 'BeSmart/1.0'})
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
 
         if data.get('result') != 'success':
-            logger.warning('Currency update: API returned non-success: %s', data.get('result'))
+            logger.warning('currency_update_api_failed', result=data.get('result'))
             return
 
         ngn_rates = data['rates']  # e.g. {"NGN": 1, "USD": 0.000728, "EUR": 0.000646, ...}
@@ -68,7 +68,7 @@ def fetch_and_update_rates():
             ngn_to_to = ngn_rates.get(to_c)
 
             if ngn_to_from is None or ngn_to_to is None or ngn_to_from == 0:
-                logger.debug('Currency update: skipping %s->%s (missing in API)', from_c, to_c)
+                logger.debug('currency_update_skipped', from_currency=from_c, to_currency=to_c, reason='missing_in_api')
                 continue
 
             # Derive: from->to = (1 / NGN->from) * NGN->to  =  NGN->to / NGN->from
@@ -79,12 +79,12 @@ def fetch_and_update_rates():
 
         if updated_count:
             CurrencyRate.objects.bulk_update(rows, ['rate', 'source', 'updated_at'])
-            logger.info('Currency update: updated %d rates', updated_count)
+            logger.info('currency_update_success', updated_count=updated_count)
         else:
-            logger.warning('Currency update: no rows were updated')
+            logger.warning('currency_update_no_updates')
 
     except Exception:
-        logger.exception('Currency update: failed')
+        logger.exception('currency_update_failed')
 
 
 _last_db_check = None

@@ -257,7 +257,7 @@ class UjunwaSendMessageView(views.APIView):
                 products_mentioned=product_uuids,
             )
         except Exception as e:
-            logger.warning('Failed to store conversation context: %s', e)
+            logger.warning('conversation_context_store_failed', error=str(e))
 
         # 11. Track analytics
         try:
@@ -271,7 +271,7 @@ class UjunwaSendMessageView(views.APIView):
                 },
             )
         except Exception as e:
-            logger.warning('Failed to store analytics: %s', e)
+            logger.warning('analytics_store_failed', error=str(e))
 
         # 12. Serialize products for response (same shape mobile expects)
         serialized_products = _serialize_products_for_response(products)
