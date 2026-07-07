@@ -40,7 +40,9 @@ class RegisterView(APIView):
     @extend_schema(
         summary="Register User (Native Django)",
         request=RegisterSerializer,
-        responses={201: UserSerializer}
+        responses={201: UserSerializer},
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
     )
     def post(self, request):
         email = request.data.get('email')
@@ -82,7 +84,9 @@ class LoginView(APIView):
     @extend_schema(
         summary="Login User (Native Django)",
         request=LoginSerializer,
-        responses={200: inline_serializer(name="LoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})}
+        responses={200: inline_serializer(name="LoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})},
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -114,7 +118,9 @@ class VendorLoginView(APIView):
     @extend_schema(
         summary="Vendor specific login",
         request=LoginSerializer,
-        responses={200: inline_serializer(name="VendorLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})}
+        responses={200: inline_serializer(name="VendorLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})},
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -156,7 +162,9 @@ class AdminLoginView(APIView):
     @extend_schema(
         summary="Admin specific login",
         request=LoginSerializer,
-        responses={200: inline_serializer(name="AdminLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})}
+        responses={200: inline_serializer(name="AdminLoginResponse", fields={"message": serializers.CharField(), "user": serializers.DictField(), "access_token": serializers.CharField(), "refresh_token": serializers.CharField()})},
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -195,7 +203,9 @@ class LogoutView(APIView):
 
     @extend_schema(
         summary="Logout User (Blacklist Token)",
-        responses={200: inline_serializer(name="LogoutResponse", fields={"message": serializers.CharField()})}
+        responses={200: inline_serializer(name="LogoutResponse", fields={"message": serializers.CharField()})},
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
     )
     def post(self, request):
         try:
@@ -214,7 +224,11 @@ class PasswordResetView(APIView):
     permission_classes = (permissions.AllowAny,)
     serializer_class = PasswordResetSerializer
 
-    @extend_schema(summary="Request Password Reset Link")
+    @extend_schema(
+        summary="Request Password Reset Link",
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
+    )
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
         if not serializer.is_valid():
@@ -244,7 +258,11 @@ class PasswordChangeView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = PasswordChangeSerializer
 
-    @extend_schema(summary="Change Password (LoggedIn User)")
+    @extend_schema(
+        summary="Change Password (LoggedIn User)",
+        deprecated=True,
+        description="DEPRECATED: We are using Supabase for all authentication. Do not use this native Django endpoint."
+    )
     def post(self, request):
         serializer = PasswordChangeSerializer(data=request.data)
         if not serializer.is_valid():
