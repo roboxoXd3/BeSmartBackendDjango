@@ -36,7 +36,7 @@ from products.models import Product
 from vendors.models import VendorPayout, EscrowTransaction, VendorFollow, PayoutTransaction
 from products.serializers import ProductListSerializer, ProductDetailSerializer
 from orders.serializers import OrderSerializer
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers, filters
 from rest_framework.decorators import action
@@ -891,16 +891,40 @@ class LoyaltyAdminViewSet(viewsets.ModelViewSet):
         serializer = LoyaltyPointsAdminSerializer(queryset, many=True)
         return Response(serializer.data)
 
+@extend_schema_view(
+    list=extend_schema(tags=['Admin Loyalty - Badges'], summary="List all loyalty badges"),
+    retrieve=extend_schema(tags=['Admin Loyalty - Badges'], summary="Get a loyalty badge"),
+    create=extend_schema(tags=['Admin Loyalty - Badges'], summary="Create a loyalty badge"),
+    update=extend_schema(tags=['Admin Loyalty - Badges'], summary="Update a loyalty badge"),
+    partial_update=extend_schema(tags=['Admin Loyalty - Badges'], summary="Partially update a loyalty badge"),
+    destroy=extend_schema(tags=['Admin Loyalty - Badges'], summary="Delete a loyalty badge"),
+)
 class LoyaltyBadgeAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = LoyaltyBadge.objects.all().order_by('display_order')
     serializer_class = LoyaltyBadgeAdminSerializer
 
+@extend_schema_view(
+    list=extend_schema(tags=['Admin Loyalty - Rewards'], summary="List all loyalty rewards"),
+    retrieve=extend_schema(tags=['Admin Loyalty - Rewards'], summary="Get a loyalty reward"),
+    create=extend_schema(tags=['Admin Loyalty - Rewards'], summary="Create a loyalty reward"),
+    update=extend_schema(tags=['Admin Loyalty - Rewards'], summary="Update a loyalty reward"),
+    partial_update=extend_schema(tags=['Admin Loyalty - Rewards'], summary="Partially update a loyalty reward"),
+    destroy=extend_schema(tags=['Admin Loyalty - Rewards'], summary="Delete a loyalty reward"),
+)
 class LoyaltyRewardAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = LoyaltyReward.objects.all().order_by('display_order')
     serializer_class = LoyaltyRewardAdminSerializer
 
+@extend_schema_view(
+    list=extend_schema(tags=['Admin Loyalty - Rules'], summary="List all loyalty earning rules"),
+    retrieve=extend_schema(tags=['Admin Loyalty - Rules'], summary="Get an earning rule"),
+    create=extend_schema(tags=['Admin Loyalty - Rules'], summary="Create an earning rule"),
+    update=extend_schema(tags=['Admin Loyalty - Rules'], summary="Update an earning rule"),
+    partial_update=extend_schema(tags=['Admin Loyalty - Rules'], summary="Partially update an earning rule"),
+    destroy=extend_schema(tags=['Admin Loyalty - Rules'], summary="Delete an earning rule"),
+)
 class LoyaltyEarningRuleAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = LoyaltyEarningRule.objects.all().order_by('-created_at')

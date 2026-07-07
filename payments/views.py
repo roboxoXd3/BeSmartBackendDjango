@@ -80,7 +80,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
 class InitiatePaymentView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
-    @extend_schema(request=InitiatePaymentSerializer, responses={200: None})
+    @extend_schema(summary="Initiate Squad Payment", tags=["Payments"], request=InitiatePaymentSerializer, responses={200: None})
     def post(self, request):
         logger.info("payment_initiation_started", user_id=request.user.id)
         serializer = InitiatePaymentSerializer(data=request.data)
