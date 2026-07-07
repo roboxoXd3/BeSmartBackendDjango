@@ -136,7 +136,7 @@ class Refund(models.Model):
     status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default='pending')
     
     # Admin details
-    initiated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    initiated_by = models.ForeignKey(User, on_delete=models.DO_NOTHING, null=True)
     admin_notes = models.TextField(blank=True, null=True)
     
     # Timestamps
