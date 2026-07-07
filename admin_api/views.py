@@ -13,7 +13,9 @@ from .serializers import (
     CategoryAdminSerializer, SubcategoryAdminSerializer,
     AdminSessionSerializer, EscrowAdminSerializer,
     SupportTicketAdminSerializer, SupportMessageAdminSerializer,
-    VendorBankAccountAdminSerializer
+    VendorBankAccountAdminSerializer, LoyaltyPointsAdminSerializer,
+    LoyaltyTransactionAdminSerializer, LoyaltyBadgeAdminSerializer, 
+    LoyaltyRewardAdminSerializer, LoyaltyEarningRuleAdminSerializer
 )
 from content.models import PromotionalBanner, HeroSection, ContactInfo, SupportInfo
 from content.serializers import (
@@ -23,7 +25,9 @@ from content.serializers import (
 from django.core.files.storage import default_storage
 from rest_framework.parsers import MultiPartParser, FormParser
 from categories.models import Category, Subcategory
-from loyalty.models import LoyaltyPoints, LoyaltyTransaction
+from loyalty.models import (
+    LoyaltyPoints, LoyaltyTransaction, LoyaltyBadge, LoyaltyReward, LoyaltyEarningRule
+)
 from django.db import transaction
 from users.models import User
 from vendors.models import Vendor
@@ -843,6 +847,64 @@ class LoyaltyAdminViewSet(viewsets.ModelViewSet):
             'points_balance': loyalty.points_balance,
             'user': str(user.id)
         })
+
+    @extend_schema(
+        summary="Get aggregate loyalty analytics",
+        responses={200: inline_serializer(
+            name="LoyaltyAnalyticsResponse",
+            fields={
+                "total_points_issued": serializers.IntegerField(),
+                "total_points_redeemed": serializers.IntegerField(),
+                "total_active_users": serializers.IntegerField(),
+            }
+        )}
+    )
+    @action(detail=False, methods=['get'])
+    def analytics(self, request):
+        from django.db.models import Sum
+        issued = LoyaltyTransaction.objects.filter(transaction_type='earn').aggregate(Sum('points_change'))['points_change__sum'] or 0
+        redeemed = LoyaltyTransaction.objects.filter(transaction_type='redeem').aggregate(Sum('points_change'))['points_change__sum'] or 0
+        
+        # If redeem transactions store negative values, make sure to take absolute value or adapt accordingly.
+        # Assuming redeem is positive or negative, let's just get the sum. If they are stored as negative, we could use abs().
+        if redeemed < 0:
+            redeemed = abs(redeemed)
+            
+        active_users = LoyaltyPoints.objects.count()
+        return Response({
+            'total_points_issued': issued,
+            'total_points_redeemed': redeemed,
+            'total_active_users': active_users,
+        })
+
+    @extend_schema(
+        summary="List all users with their loyalty points",
+        responses={200: LoyaltyPointsAdminSerializer(many=True)}
+    )
+    @action(detail=False, methods=['get'])
+    def users(self, request):
+        queryset = LoyaltyPoints.objects.select_related('user').all().order_by('-points_balance')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = LoyaltyPointsAdminSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = LoyaltyPointsAdminSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+class LoyaltyBadgeAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = LoyaltyBadge.objects.all().order_by('display_order')
+    serializer_class = LoyaltyBadgeAdminSerializer
+
+class LoyaltyRewardAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = LoyaltyReward.objects.all().order_by('display_order')
+    serializer_class = LoyaltyRewardAdminSerializer
+
+class LoyaltyEarningRuleAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = LoyaltyEarningRule.objects.all().order_by('-created_at')
+    serializer_class = LoyaltyEarningRuleAdminSerializer
 
 class AdminProductImageUploadView(views.APIView):
     """POST /api/admin/products/{id}/images/ and DELETE /api/admin/products/{id}/images/"""

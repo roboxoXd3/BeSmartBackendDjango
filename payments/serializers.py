@@ -25,6 +25,7 @@ class InitiatePaymentSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
     email = serializers.EmailField(required=False)
     currency = serializers.CharField(max_length=10, required=False, default='NGN')
+    callback_url = serializers.URLField(required=False)
 
     def validate_order_id(self, value):
         try:

@@ -11,7 +11,8 @@ from .views import (
     AdminVersionUpdateView, EscrowAdminViewSet, SupportTicketAdminViewSet,
     VendorBankAccountAdminViewSet, HeroSectionAdminViewSet,
     ContactInfoAdminViewSet, PromotionalBannerAdminViewSet, SupportInfoAdminViewSet,
-    AdminCategoryImageUploadView
+    AdminCategoryImageUploadView,
+    LoyaltyBadgeAdminViewSet, LoyaltyRewardAdminViewSet, LoyaltyEarningRuleAdminViewSet
 )
 
 router = DefaultRouter()
@@ -26,6 +27,9 @@ router.register(r'orders', OrderAdminViewSet, basename='admin-orders')
 router.register(r'payouts', PayoutAdminViewSet, basename='admin-payouts')
 router.register(r'transactions', TransactionAdminViewSet, basename='admin-transactions')
 router.register(r'loyalty', LoyaltyAdminViewSet, basename='admin-loyalty')
+router.register(r'loyalty/badges', LoyaltyBadgeAdminViewSet, basename='admin-loyalty-badges')
+router.register(r'loyalty/rewards', LoyaltyRewardAdminViewSet, basename='admin-loyalty-rewards')
+router.register(r'loyalty/rules', LoyaltyEarningRuleAdminViewSet, basename='admin-loyalty-rules')
 router.register(r'escrow', EscrowAdminViewSet, basename='admin-escrow')
 router.register(r'support-tickets', SupportTicketAdminViewSet, basename='admin-support-tickets')
 router.register(r'hero-sections', HeroSectionAdminViewSet, basename='admin-hero-sections')

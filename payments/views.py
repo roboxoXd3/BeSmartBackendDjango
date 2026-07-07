@@ -88,6 +88,7 @@ class InitiatePaymentView(views.APIView):
 
         order_id = serializer.validated_data['order_id']
         currency = serializer.validated_data.get('currency', 'NGN')
+        callback_url = serializer.validated_data.get('callback_url')
 
         # Always derive amount and email from the verified order — never trust client
         order = get_object_or_404(Order, id=order_id, user=request.user)
@@ -111,6 +112,7 @@ class InitiatePaymentView(views.APIView):
                 email=email,
                 transaction_ref=transaction_ref,
                 currency=currency,
+                callback_url=callback_url,
                 is_recurring=True
             )
 

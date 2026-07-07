@@ -6,7 +6,24 @@ from vendors.models import Vendor, VendorPayout, PayoutTransaction
 from orders.serializers import OrderSerializer
 from orders.models import Order
 from categories.models import Category, Subcategory
-from loyalty.models import LoyaltyPoints, LoyaltyTransaction
+from loyalty.models import (
+    LoyaltyPoints, LoyaltyTransaction, LoyaltyBadge, LoyaltyReward, LoyaltyEarningRule
+)
+
+class LoyaltyBadgeAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltyBadge
+        fields = '__all__'
+
+class LoyaltyRewardAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltyReward
+        fields = '__all__'
+
+class LoyaltyEarningRuleAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoyaltyEarningRule
+        fields = '__all__'
 
 class AdminUserSerializer(serializers.ModelSerializer):
     user_details = UserSerializer(source='user', read_only=True)
@@ -142,7 +159,7 @@ class VendorAdminSerializer(serializers.ModelSerializer):
 class PayoutAdminSerializer(serializers.ModelSerializer):
     vendor_business_name = serializers.CharField(source='vendor.business_name', read_only=True)
     vendor_email = serializers.CharField(source='vendor.user.email', read_only=True)
-    vendor_logo = serializers.CharField(source='vendor.business_logo', read_only=True)
+    business_logo = serializers.CharField(source='vendor.business_logo', read_only=True)
     bank_details = serializers.SerializerMethodField()
     
     class Meta:
@@ -246,7 +263,7 @@ class OrderAdminSerializer(OrderSerializer):
                 {
                     "id": v.id,
                     "business_name": v.business_name,
-                    "logo_url": v.business_logo
+                    "business_logo": v.business_logo
                 } for v in vendors
             ]
         except Exception as e:
@@ -264,6 +281,8 @@ class SubcategoryAdminSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class LoyaltyPointsAdminSerializer(serializers.ModelSerializer):
+    user_details = UserSerializer(source='user', read_only=True)
+    
     class Meta:
         model = LoyaltyPoints
         fields = '__all__'
