@@ -263,6 +263,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        logger.info("order_validation_started", user_id=request.user.id)
         serializer = CreateOrderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -294,6 +295,8 @@ class OrderListCreateView(generics.ListCreateAPIView):
                 return Response({"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
             subtotal = sum(item.quantity * item.product.price for item in cart_items)
             order_products = None  # Marker for cart-based
+            
+        logger.info("order_items_processed", user_id=request.user.id, items_count=len(order_products) if order_products else len(cart_items), subtotal=subtotal)
 
         shipping_fee = 0
         discount_amount = 0
@@ -312,6 +315,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
                 else:
                     discount_amount = float(v.discount_value)
                 used_voucher = v
+                logger.info("loyalty_voucher_applied", user_id=request.user.id, voucher_code=v.voucher_code, discount_amount=discount_amount)
 
         total = subtotal - discount_amount + shipping_fee
 
@@ -334,6 +338,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
             escrow_status=escrow_status_val,
             status=order_status,
         )
+        logger.info("order_record_created", user_id=request.user.id, order_id=order.id, status=order_status)
 
         if order_products is not None:
             # Direct items
@@ -350,6 +355,8 @@ class OrderListCreateView(generics.ListCreateAPIView):
                     price=item.product.price, selected_size=item.selected_size, selected_color=item.selected_color
                 )
             cart.items.all().delete()
+            
+        logger.info("order_items_created", user_id=request.user.id, order_id=order.id)
 
         if used_voucher:
             used_voucher.status = 'used'
@@ -409,6 +416,7 @@ class OrderPaymentStatusView(views.APIView):
         responses={200: inline_serializer("OrderPaymentStatusRes", {"success": serializers.BooleanField(), "order": OrderSerializer()})},
     )
     def patch(self, request, id):
+        logger.info("payment_status_update_started", user_id=request.user.id, order_id=id)
         order = get_object_or_404(Order, id=id, user=request.user)
         payment_status_val = request.data.get('payment_status')
         squad_gateway_ref = request.data.get('squad_gateway_ref')
@@ -452,6 +460,7 @@ class OrderStatusUpdateView(views.APIView):
     )
     @transaction.atomic
     def patch(self, request, id):
+        logger.info("order_status_update_started", user_id=request.user.id, order_id=id)
         order = get_object_or_404(Order, id=id, user=request.user)
         new_status = request.data.get('status', '').strip()
         valid_statuses = dict(Order.STATUS_CHOICES).keys()

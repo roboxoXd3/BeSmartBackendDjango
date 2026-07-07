@@ -41,9 +41,29 @@ def run_scenario():
     })
     print(res.status_code, res.text)
 
-    # 3. Hit cart or orders if available
+    # 3. Currency Rates (Unauthenticated)
+    print("Hitting GET /api/currency/rates/")
+    res = requests.get(f"{BASE_URL}/api/currency/rates/")
+    print(res.status_code)
+
+    # 4. Support AI Chat
+    print("Hitting POST /api/support/chat/send/")
+    res = requests.post(f"{BASE_URL}/api/support/chat/send/", headers=headers, json={"message": "I need some comfortable running shoes"})
+    print(res.status_code)
+
+    # 5. Orders List
     print("Hitting GET /api/orders/")
     res = requests.get(f"{BASE_URL}/api/orders/", headers=headers)
+    print(res.status_code)
+
+    # 6. Try creating an order (might fail due to missing cart, but will log)
+    print("Hitting POST /api/orders/")
+    res = requests.post(f"{BASE_URL}/api/orders/", headers=headers, json={})
+    print(res.status_code)
+
+    # 7. Try triggering a payment initiation
+    print("Hitting POST /api/payments/initiate/")
+    res = requests.post(f"{BASE_URL}/api/payments/initiate/", headers=headers, json={"order_id": "00000000-0000-0000-0000-000000000000"})
     print(res.status_code)
     
     print("--- Finished generating logs! ---")

@@ -82,6 +82,7 @@ class InitiatePaymentView(views.APIView):
 
     @extend_schema(request=InitiatePaymentSerializer, responses={200: None})
     def post(self, request):
+        logger.info("payment_initiation_started", user_id=request.user.id)
         serializer = InitiatePaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -92,6 +93,8 @@ class InitiatePaymentView(views.APIView):
         order = get_object_or_404(Order, id=order_id, user=request.user)
         amount = float(order.total)
         email = serializer.validated_data.get('email') or request.user.email
+        
+        logger.info("payment_order_validated", user_id=request.user.id, order_id=order.id, amount=amount, email=email)
 
         # Generate a unique transaction reference
         transaction_ref = f"BESMART-{uuid.uuid4().hex[:16].upper()}"
@@ -101,6 +104,7 @@ class InitiatePaymentView(views.APIView):
         squad_service = SquadPaymentService()
         
         try:
+            logger.info("payment_gateway_request_started", user_id=request.user.id, transaction_ref=transaction_ref)
             # We enforce is_recurring=True so the token is saved for future charges
             squad_response = squad_service.initiate_payment(
                 amount=Decimal(str(amount)),
@@ -149,11 +153,13 @@ class VerifyPaymentView(views.APIView):
     @extend_schema(responses={200: None})
     def get(self, request, ref):
         transaction_ref = ref
+        logger.info("payment_verification_started", transaction_ref=transaction_ref)
 
         squad_secret_key = getattr(settings, 'SQUAD_SECRET_KEY', '')
         squad_base_url = getattr(settings, 'SQUAD_BASE_URL', 'https://api-d.squadco.com')
 
         try:
+            logger.info("payment_gateway_verify_started", transaction_ref=transaction_ref)
             squad_response = http_requests.get(
                 f"{squad_base_url}/transaction/verify/{transaction_ref}",
                 headers={
@@ -166,6 +172,7 @@ class VerifyPaymentView(views.APIView):
             payment_status = squad_data.get('data', {}).get('transaction_status', '')
             gateway_ref = squad_data.get('data', {}).get('gateway_transaction_ref', '')
             is_successful = payment_status.lower() == 'success'
+            logger.info("payment_gateway_verify_completed", transaction_ref=transaction_ref, payment_status=payment_status, is_successful=is_successful)
         except Exception as e:
             logger.error("payment_verification_error", transaction_ref=transaction_ref, error=str(e))
             return Response({
