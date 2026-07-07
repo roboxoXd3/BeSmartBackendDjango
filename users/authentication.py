@@ -74,5 +74,6 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             return (user, None)
 
         except Exception as e:
-            print(f"DEBUG: Supabase token validation failed (treating as anonymous): {e}")
+            # Ignoring the print to avoid IOError in background processes
+            pass
             return None
