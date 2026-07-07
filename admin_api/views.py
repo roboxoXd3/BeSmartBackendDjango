@@ -339,7 +339,7 @@ class AdminRevenueChartView(views.APIView):
         
         orders = Order.objects.filter(created_at__gte=start_date, created_at__lte=end_date, status__in=['delivered', 'shipped', 'confirmed'])
         if vendor_id:
-            orders = orders.filter(order_items__product__vendor_id=vendor_id).distinct()
+            orders = orders.filter(items__product__vendor_id=vendor_id).distinct()
         
         daily_sales = list(orders
             .annotate(date=TruncDate('created_at'))
@@ -352,13 +352,21 @@ class AdminRevenueChartView(views.APIView):
             for entry in daily_sales
         ]
         
-        category_breakdown = list(orders.values(cat_name=F('order_items__product__category__name'))
-                                  .annotate(revenue=Sum('order_items__subtotal'))
+        category_breakdown = list(orders.values(cat_id=F('items__product__category_id'))
+                                  .annotate(revenue=Sum(F('items__price') * F('items__quantity')))
                                   .order_by('-revenue'))
         
+        # Fetch category names
+        from categories.models import Category
+        category_ids = [c['cat_id'] for c in category_breakdown if c['cat_id']]
+        category_map = {cat.id: cat.name for cat in Category.objects.filter(id__in=category_ids)}
+
         formatted_category_breakdown = [
-            {"category": entry["cat_name"] or "Unknown", "revenue": float(entry["revenue"] or 0)}
-            for entry in category_breakdown
+            {
+                "category": category_map.get(cat['cat_id'], 'Unknown'),
+                "revenue": float(cat['revenue'] or 0)
+            }
+            for cat in category_breakdown
         ]
         
         resp_data = {
@@ -472,7 +480,7 @@ class OrderAdminFilter(django_filters.FilterSet):
     dateTo = django_filters.DateTimeFilter(field_name='created_at', lookup_expr='lte')
     minAmount = django_filters.NumberFilter(field_name='total', lookup_expr='gte')
     maxAmount = django_filters.NumberFilter(field_name='total', lookup_expr='lte')
-    vendorId = django_filters.UUIDFilter(field_name='order_items__product__vendor_id')
+    vendorId = django_filters.UUIDFilter(field_name='items__product__vendor_id')
     user_id = django_filters.UUIDFilter(field_name='user_id')
 
     class Meta:
