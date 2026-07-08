@@ -29,3 +29,12 @@ Thumbs.db
 *.pem
 *.key
 credentials.json
+
+# Temporary DB and admin scripts
+cleanup_test_data.py
+extract_data.py
+extract_data_fast.py
+restore_data.py
+temp_data_dump/
+temp_data_dump_after/
+final_admin_panel_changes.md
