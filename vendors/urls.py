@@ -15,7 +15,8 @@ from .views import (
     VendorPayoutSummaryView,
     VendorProductReviewViewSet, VendorProductQAViewSet,
     VendorProductSizeChartAssignView, VendorSessionViewSet,
-    VendorAnalyticsTrackView, VendorAnalyticsFunnelView, VendorAnalyticsPerformanceView
+    VendorAnalyticsTrackView, VendorAnalyticsFunnelView, VendorAnalyticsPerformanceView,
+    VendorAnalyticsViewsOverTimeView
 )
 
 router = DefaultRouter()
@@ -47,6 +48,7 @@ urlpatterns = [
     path('analytics/track/', VendorAnalyticsTrackView.as_view(), name='vendor-analytics-track'),
     path('analytics/funnel/', VendorAnalyticsFunnelView.as_view(), name='vendor-analytics-funnel'),
     path('analytics/performance/', VendorAnalyticsPerformanceView.as_view(), name='vendor-analytics-performance'),
+    path('analytics/views-over-time/', VendorAnalyticsViewsOverTimeView.as_view(), name='vendor-analytics-views-over-time'),
     path('stats/customer-locations/', VendorCustomerLocationsView.as_view(), name='vendor-customer-locations'),
     path('payouts/summary/', VendorPayoutSummaryView.as_view(), name='vendor-payouts-summary'),
     path('payouts/', VendorPayoutListView.as_view(), name='vendor-payouts'),

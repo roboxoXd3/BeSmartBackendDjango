@@ -118,6 +118,9 @@ class VendorAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = Vendor.objects.all().order_by('-created_at')
     serializer_class = VendorAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status']
+    ordering_fields = ['total_sales', 'created_at', 'average_rating']
 
     @extend_schema(summary="Get pending vendor approvals")
     @action(detail=False, methods=['get'], url_path='pending-approvals')
@@ -201,9 +204,9 @@ class SystemStatsView(views.APIView):
         thirty_days_ago = now - timedelta(days=30)
         sixty_days_ago = now - timedelta(days=60)
         
-        order_aggs = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'), avg=Avg('total'))
-        total_revenue = order_aggs['total'] or 0.00
-        avg_order_value = order_aggs['avg'] or 0.00
+        order_aggs = Order.objects.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total_revenue=Sum('total'), avg_value=Avg('total'))
+        total_revenue = order_aggs['total_revenue'] or 0.00
+        avg_order_value = order_aggs['avg_value'] or 0.00
         
         total_payouts_pending = VendorPayout.objects.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0.00
         
@@ -216,11 +219,11 @@ class SystemStatsView(views.APIView):
         curr_vendors = Vendor.objects.filter(created_at__gte=thirty_days_ago).count()
         vendors_change = ((curr_vendors - prev_vendors) / max(prev_vendors, 1)) * 100
         
-        prev_order_aggs = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'), avg=Avg('total'))
-        prev_revenue = prev_order_aggs['total'] or 0.00
+        prev_order_aggs = Order.objects.filter(created_at__gte=sixty_days_ago, created_at__lt=thirty_days_ago, status__in=['delivered', 'shipped', 'confirmed']).aggregate(total_revenue=Sum('total'), avg_value=Avg('total'))
+        prev_revenue = prev_order_aggs['total_revenue'] or 0.00
         revenue_change = ((float(total_revenue) - float(prev_revenue)) / max(float(prev_revenue), 1)) * 100
 
-        prev_aov = prev_order_aggs['avg'] or 0.00
+        prev_aov = prev_order_aggs['avg_value'] or 0.00
         aov_change = ((float(avg_order_value) - float(prev_aov)) / max(float(prev_aov), 1)) * 100
             
         data = {
@@ -557,7 +560,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
         request=inline_serializer(
             name="PayoutStatusAdminRequest",
             fields={
-                "status": serializers.ChoiceField(choices=["pending", "processing", "completed", "failed"]),
+                "status": serializers.ChoiceField(choices=["pending", "processing", "completed", "failed", "cancelled"]),
                 "admin_notes": serializers.CharField(required=False, allow_blank=True)
             }
         ),
@@ -574,7 +577,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
         admin_notes = request.data.get('admin_notes')
         
         from django.utils import timezone
-        if new_status in ['pending', 'processing', 'completed', 'failed']:
+        if new_status in ['pending', 'processing', 'completed', 'failed', 'cancelled']:
             payout.status = new_status
             if new_status == 'completed':
                 payout.completed_at = timezone.now()
@@ -673,6 +676,52 @@ class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_class = EscrowAdminFilter
     search_fields = ['reference_id', 'vendor__business_name']
     ordering_fields = ['created_at', 'amount']
+
+    @extend_schema(
+        summary="Release an escrow transaction",
+        responses={200: inline_serializer(name="EscrowReleaseResponse", fields={"status": serializers.CharField()})}
+    )
+    @action(detail=True, methods=['post'])
+    def release(self, request, pk=None):
+        from django.utils import timezone
+        from django.db import transaction
+        with transaction.atomic():
+            escrow = self.get_object()
+            if escrow.status != 'held':
+                return Response({'error': f'Escrow is already {escrow.status}'}, status=status.HTTP_400_BAD_REQUEST)
+            escrow.status = 'released'
+            escrow.release_date = timezone.now()
+            escrow.save()
+            vendor = escrow.vendor
+            vendor.available_balance += escrow.amount
+            vendor.save()
+        return Response({'status': 'escrow released'})
+
+    @extend_schema(
+        summary="Hold an escrow transaction",
+        responses={200: inline_serializer(name="EscrowHoldResponse", fields={"status": serializers.CharField()})}
+    )
+    @action(detail=True, methods=['post'])
+    def hold(self, request, pk=None):
+        escrow = self.get_object()
+        if escrow.status == 'held':
+            return Response({'error': 'Escrow is already held'}, status=status.HTTP_400_BAD_REQUEST)
+        escrow.status = 'held'
+        escrow.save()
+        return Response({'status': 'escrow held'})
+
+    @extend_schema(
+        summary="Refund an escrow transaction",
+        responses={200: inline_serializer(name="EscrowRefundResponse", fields={"status": serializers.CharField()})}
+    )
+    @action(detail=True, methods=['post'])
+    def refund(self, request, pk=None):
+        escrow = self.get_object()
+        if escrow.status == 'refunded':
+            return Response({'error': 'Escrow is already refunded'}, status=status.HTTP_400_BAD_REQUEST)
+        escrow.status = 'refunded'
+        escrow.save()
+        return Response({'status': 'escrow refunded'})
 
 from support.models import SupportTicket
 
@@ -856,25 +905,69 @@ class LoyaltyAdminViewSet(viewsets.ModelViewSet):
                 "total_points_issued": serializers.IntegerField(),
                 "total_points_redeemed": serializers.IntegerField(),
                 "total_active_users": serializers.IntegerField(),
+                "tier_distribution": serializers.DictField(),
+                "voucher_stats": serializers.DictField(),
+                "thirty_day_trend": serializers.ListField(child=serializers.DictField()),
+                "top_5_rewards": serializers.ListField(child=serializers.DictField()),
+                "last_10_redemptions": serializers.ListField(child=serializers.DictField())
             }
         )}
     )
     @action(detail=False, methods=['get'])
     def analytics(self, request):
-        from django.db.models import Sum
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+        from datetime import timedelta
+        from loyalty.models import LoyaltyVoucher
+        
         issued = LoyaltyTransaction.objects.filter(transaction_type='earn').aggregate(Sum('points_change'))['points_change__sum'] or 0
         redeemed = LoyaltyTransaction.objects.filter(transaction_type='redeem').aggregate(Sum('points_change'))['points_change__sum'] or 0
         
-        # If redeem transactions store negative values, make sure to take absolute value or adapt accordingly.
-        # Assuming redeem is positive or negative, let's just get the sum. If they are stored as negative, we could use abs().
         if redeemed < 0:
             redeemed = abs(redeemed)
             
         active_users = LoyaltyPoints.objects.count()
+
+        tier_distribution = dict(LoyaltyPoints.objects.values_list('tier').annotate(count=Count('id')))
+        voucher_stats = dict(LoyaltyVoucher.objects.values_list('status').annotate(count=Count('id')))
+        
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        trend = LoyaltyTransaction.objects.filter(created_at__gte=thirty_days_ago)\
+            .values('created_at__date', 'transaction_type')\
+            .annotate(total=Sum('points_change'))
+            
+        thirty_day_trend = [
+            {
+                'date': item['created_at__date'].isoformat(),
+                'type': item['transaction_type'],
+                'total': abs(item['total'])
+            } for item in trend
+        ]
+        
+        top_rewards_query = LoyaltyVoucher.objects.values('reward__name')\
+            .annotate(count=Count('id')).order_by('-count')[:5]
+        top_5_rewards = [{'reward_name': r['reward__name'], 'count': r['count']} for r in top_rewards_query]
+        
+        last_redemptions = LoyaltyVoucher.objects.filter(status='used')\
+            .select_related('user', 'reward').order_by('-used_at')[:10]
+        last_10_redemptions = [
+            {
+                'voucher_code': v.voucher_code,
+                'reward_name': v.reward.name,
+                'user_email': v.user.email,
+                'used_at': v.used_at.isoformat() if v.used_at else None
+            } for v in last_redemptions
+        ]
+
         return Response({
             'total_points_issued': issued,
             'total_points_redeemed': redeemed,
             'total_active_users': active_users,
+            'tier_distribution': tier_distribution,
+            'voucher_stats': voucher_stats,
+            'thirty_day_trend': thirty_day_trend,
+            'top_5_rewards': top_5_rewards,
+            'last_10_redemptions': last_10_redemptions
         })
 
     @extend_schema(
@@ -916,6 +1009,14 @@ class LoyaltyRewardAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = LoyaltyReward.objects.all().order_by('display_order')
     serializer_class = LoyaltyRewardAdminSerializer
+
+class LoyaltyTransactionAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAdminUser]
+    queryset = LoyaltyTransaction.objects.all().order_by('-created_at')
+    serializer_class = LoyaltyTransactionAdminSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['user_id', 'transaction_type']
+    ordering_fields = ['created_at', 'points_change']
 
 @extend_schema_view(
     list=extend_schema(tags=['Admin Loyalty - Rules'], summary="List all loyalty earning rules"),

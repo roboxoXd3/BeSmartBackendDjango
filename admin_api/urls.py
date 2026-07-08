@@ -11,7 +11,7 @@ from .views import (
     AdminVersionUpdateView, EscrowAdminViewSet, SupportTicketAdminViewSet,
     VendorBankAccountAdminViewSet, HeroSectionAdminViewSet,
     ContactInfoAdminViewSet, PromotionalBannerAdminViewSet, SupportInfoAdminViewSet,
-    AdminCategoryImageUploadView,
+    AdminCategoryImageUploadView, LoyaltyTransactionAdminViewSet,
     LoyaltyBadgeAdminViewSet, LoyaltyRewardAdminViewSet, LoyaltyEarningRuleAdminViewSet
 )
 
@@ -29,6 +29,7 @@ router.register(r'transactions', TransactionAdminViewSet, basename='admin-transa
 router.register(r'loyalty/badges', LoyaltyBadgeAdminViewSet, basename='admin-loyalty-badges')
 router.register(r'loyalty/rewards', LoyaltyRewardAdminViewSet, basename='admin-loyalty-rewards')
 router.register(r'loyalty/rules', LoyaltyEarningRuleAdminViewSet, basename='admin-loyalty-rules')
+router.register(r'loyalty/transactions', LoyaltyTransactionAdminViewSet, basename='admin-loyalty-transactions')
 router.register(r'loyalty', LoyaltyAdminViewSet, basename='admin-loyalty')
 router.register(r'escrow', EscrowAdminViewSet, basename='admin-escrow')
 router.register(r'support-tickets', SupportTicketAdminViewSet, basename='admin-support-tickets')

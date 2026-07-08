@@ -462,6 +462,35 @@ class VendorDashboardStatsView(views.APIView):
             "currency": "NGN",
             "monthlyRevenue": monthly_revenue
         })
+class VendorAnalyticsViewsOverTimeView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Vendor product views over time",
+        parameters=[OpenApiParameter('period', OpenApiTypes.STR, description='Period e.g., 7d, 30d', required=False)]
+    )
+    def get(self, request):
+        from django.db.models import Count
+        from django.utils import timezone
+        from datetime import timedelta
+        from products.models import ProductViews
+        
+        vendor = get_object_or_404(Vendor, user=request.user)
+        period_str = request.query_params.get('period', '30d')
+        days = 30
+        if period_str.endswith('d') and period_str[:-1].isdigit():
+            days = int(period_str[:-1])
+            
+        start_date = timezone.now() - timedelta(days=days)
+        vendor_products = Product.objects.filter(vendor_id=vendor.id).values_list('id', flat=True)
+        
+        views_qs = ProductViews.objects.filter(
+            product_id__in=vendor_products, 
+            created_at__gte=start_date
+        ).values('created_at__date').annotate(count=Count('id')).order_by('created_at__date')
+        
+        data = [{'date': v['created_at__date'].isoformat() if hasattr(v['created_at__date'], 'isoformat') else str(v['created_at__date']), 'views': v['count']} for v in views_qs]
+        return Response({'data': data})
 
 class VendorAnalyticsSalesView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -762,6 +791,18 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
     filterset_fields = ['category_id', 'status', 'approval_status']
     search_fields = ['name', 'sku']
     ordering_fields = ['name', 'price', 'added_date']
+
+    @extend_schema(summary="Get aggregate statistics for vendor products")
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        from django.db.models import Count, Q
+        stats = self.get_queryset().aggregate(
+            totalProducts=Count('id'),
+            activeProducts=Count('id', filter=Q(status='active')),
+            outOfStock=Count('id', filter=Q(in_stock=False) | Q(stock_quantity=0)),
+            featuredProducts=Count('id', filter=Q(is_featured=True))
+        )
+        return Response(stats)
 
     @extend_schema(request=inline_serializer("VendorProductUploadImageReq", {"image": serializers.ImageField()}))
 
