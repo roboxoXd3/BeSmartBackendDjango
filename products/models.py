@@ -107,7 +107,7 @@ class ProductQuestion(models.Model):
     answered_at = models.DateTimeField(null=True, blank=True)
     is_helpful_count = models.IntegerField(default=0)
     is_verified = models.BooleanField(default=False)
-    status = models.CharField(max_length=20, default='published')
+    status = models.CharField(max_length=20, default='pending')
     vendor_response = models.TextField(null=True, blank=True)
     vendor_response_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

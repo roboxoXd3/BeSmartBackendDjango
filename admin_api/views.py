@@ -83,7 +83,7 @@ class AppSettingsViewSet(viewsets.ModelViewSet):
 
 class UserAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = User.objects.all().order_by('-date_joined')
+    queryset = User.objects.select_related('profile').all().order_by('-date_joined')
     
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -116,7 +116,14 @@ class UserAdminViewSet(viewsets.ModelViewSet):
 
 class VendorAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = Vendor.objects.all().order_by('-created_at')
+    
+    def get_queryset(self):
+        from django.db.models import Count, Q
+        return Vendor.objects.select_related('user').annotate(
+            product_count_annotated=Count('products', distinct=True),
+            approved_products_annotated=Count('products', filter=Q(products__approval_status='approved'), distinct=True),
+            pending_products_annotated=Count('products', filter=Q(products__approval_status='pending'), distinct=True)
+        ).order_by('-created_at')
     serializer_class = VendorAdminSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status']
@@ -400,7 +407,11 @@ class ProductAdminFilter(django_filters.FilterSet):
 
 class ProductAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = Product.objects.all().order_by('-added_date')
+    
+    def get_queryset(self):
+        from products.views import get_optimized_product_queryset
+        qs = Product.objects.all().order_by('-added_date')
+        return get_optimized_product_queryset(qs)
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ProductAdminFilter
     search_fields = ['name', 'description']
@@ -498,7 +509,7 @@ class OrderAdminFilter(django_filters.FilterSet):
 
 class OrderAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = Order.objects.select_related('user').prefetch_related('items', 'items__product').all().order_by('-created_at').distinct()
+    queryset = Order.objects.select_related('user').prefetch_related('items', 'items__product', 'items__product__vendor').all().order_by('-created_at').distinct()
     serializer_class = OrderAdminSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = OrderAdminFilter
@@ -552,7 +563,7 @@ class OrderAdminViewSet(viewsets.ModelViewSet):
 
 class PayoutAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = VendorPayout.objects.all().order_by('-requested_at')
+    queryset = VendorPayout.objects.select_related('vendor', 'vendor__user').prefetch_related('vendor__vendorbankaccount_set').all().order_by('-requested_at')
     serializer_class = PayoutAdminSerializer
 
     @extend_schema(
@@ -759,7 +770,7 @@ class SupportTicketAdminViewSet(viewsets.ModelViewSet):
             ticket=ticket,
             sender=request.user,
             sender_role='admin',
-            message=message_text
+            message_content=message_text
         )
         
         # Extract AdminUser instance for assigned_to

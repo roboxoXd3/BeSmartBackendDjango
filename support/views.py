@@ -61,7 +61,7 @@ class SupportMessageView(generics.ListCreateAPIView):
         if ticket.vendor.user != self.request.user:
             from django.core.exceptions import PermissionDenied
             raise PermissionDenied("You do not have permission to post messages to this ticket.")
-        serializer.save(ticket=ticket, sender=self.request.user)
+        serializer.save(ticket=ticket, sender=self.request.user, sender_role='vendor')
 
 class ChatConversationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]

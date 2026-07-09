@@ -21,6 +21,8 @@ class ProductListSerializer(serializers.ModelSerializer):
         ]
         
     def get_vendor_name(self, obj):
+        if hasattr(obj, 'vendor_name_annotated'):
+            return obj.vendor_name_annotated
         if not obj.vendor_id:
             return None
         from vendors.models import Vendor

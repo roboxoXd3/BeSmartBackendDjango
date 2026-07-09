@@ -810,7 +810,9 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Product.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
-        return Product.objects.filter(vendor_id=vendor.id).order_by('-added_date')
+        qs = Product.objects.filter(vendor_id=vendor.id).order_by('-added_date')
+        from products.views import get_optimized_product_queryset
+        return get_optimized_product_queryset(qs)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -1216,7 +1218,7 @@ class VendorProductQAViewSet(viewsets.ReadOnlyModelViewSet):
         elif action_type == 'hide':
             qa.status = 'hidden'
         elif action_type == 'show':
-            qa.status = 'published'
+            qa.status = 'answered'
             
         qa.save()
         return Response(self.get_serializer(qa).data)

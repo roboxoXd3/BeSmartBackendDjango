@@ -19,12 +19,17 @@ logger = get_logger(__name__)
 
 def get_optimized_product_queryset(base_qs):
     category_name_sq = Category.objects.filter(id=OuterRef('category_id')).values('name')[:1]
-    qs = base_qs.annotate(category_name=Subquery(category_name_sq))
+    from vendors.models import Vendor
+    vendor_name_sq = Vendor.objects.filter(id=OuterRef('vendor_id')).values('business_name')[:1]
+    qs = base_qs.annotate(
+        category_name=Subquery(category_name_sq),
+        vendor_name_annotated=Subquery(vendor_name_sq)
+    )
     qs = qs.only(
         'id', 'name', 'price', 'images', 'rating', 'reviews', 'in_stock',
         'discount_percentage', 'is_on_sale', 'sale_price', 'is_featured',
         'is_new_arrival', 'sku', 'status', 'stock_quantity', 'category_id',
-        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date'
+        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date', 'vendor_id'
     )
     return qs
 
@@ -315,14 +320,14 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return ProductQuestion.objects.none()
-        return ProductQuestion.objects.filter(product_id=self.kwargs['id'], status='published').order_by('-created_at')
+        return ProductQuestion.objects.filter(product_id=self.kwargs['id'], status='answered').order_by('-created_at')
 
     def perform_create(self, serializer):
         product = get_object_or_404(Product, id=self.kwargs['id'], status='active', approval_status='approved')
         logger.info("product_qa_started", product_id=product.id, user_id=self.request.user.id)
         d = serializer.validated_data
         self.created_qa = ProductQuestion.objects.create(
-            product=product, user=self.request.user, question=d['question']
+            product=product, user=self.request.user, question=d['question'], status='pending'
         )
         logger.info("product_qa_question_created", product_id=product.id, user_id=self.request.user.id, qa_id=self.created_qa.id)
 
@@ -337,7 +342,7 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
         from .serializers import ProductQuestionSerializer
         from django.db.models import Q
         product = get_object_or_404(Product, id=self.kwargs['id'], status='active', approval_status='approved')
-        qa = ProductQuestion.objects.filter(product=product, status='published').select_related('user')
+        qa = ProductQuestion.objects.filter(product=product, status='answered').select_related('user')
 
         # Gap 11: searchQuestions
         search = request.query_params.get('search', '').strip()
@@ -363,8 +368,8 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
                 )
 
         qa = qa.order_by('-created_at')
-        answered = ProductQuestion.objects.filter(product=product, status='published').exclude(answer__isnull=True).exclude(answer='').count()
-        total = ProductQuestion.objects.filter(product=product, status='published').count()
+        answered = ProductQuestion.objects.filter(product=product, status='answered').exclude(answer__isnull=True).exclude(answer='').count()
+        total = ProductQuestion.objects.filter(product=product, status='answered').count()
         return Response({
             "count": qa.count(),
             "results": ProductQuestionSerializer(qa, many=True).data,
@@ -383,7 +388,7 @@ class ProductQAAnswerView(views.APIView):
         responses={200: inline_serializer(name="ProductQAAnswerRes", fields={"id": serializers.UUIDField(), "answer": serializers.CharField(), "status": serializers.CharField()})}
     )
     def post(self, request, id, qa_id):
-        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
+        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id)
         answer_text = request.data.get('answer', '').strip()
         if not answer_text:
             return Response({'error': 'Answer text is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -402,7 +407,7 @@ class ProductQAAnswerView(views.APIView):
         qa.answer = answer_text
         qa.answered_by = request.user.id
         qa.answered_at = tz.now()
-        qa.status = 'published'
+        qa.status = 'answered'
         qa.save(update_fields=['answer', 'answered_by', 'answered_at', 'status', 'updated_at'])
         
         logger.info("product_qa_answer_created", product_id=product.id, qa_id=qa.id, vendor_user_id=request.user.id)
@@ -424,7 +429,7 @@ class ProductQAHelpfulView(views.APIView):
         })}
     )
     def post(self, request, id, qa_id):
-        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
+        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='answered')
         qa.is_helpful_count = (qa.is_helpful_count or 0) + 1
         qa.save(update_fields=['is_helpful_count'])
         logger.info("product_qa_marked_helpful", product_id=id, qa_id=qa.id, user_id=request.user.id)
