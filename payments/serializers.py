@@ -26,6 +26,10 @@ class InitiatePaymentSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False)
     currency = serializers.CharField(max_length=10, required=False, default='NGN')
     callback_url = serializers.URLField(required=False, help_text="Optional callback URL for this specific payment. Overrides the default dashboard URL.")
+    
+    # TODO: Once the Squad merchant account is authorized for recurring billing,
+    # we can change this default back to True or enforce it in the view if auto-tokenization is desired.
+    is_recurring = serializers.BooleanField(default=False, help_text="Set to true to tokenize the card. Requires merchant account approval.")
 
     def validate_order_id(self, value):
         try:

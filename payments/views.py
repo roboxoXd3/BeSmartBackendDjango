@@ -89,6 +89,7 @@ class InitiatePaymentView(views.APIView):
         order_id = serializer.validated_data['order_id']
         currency = serializer.validated_data.get('currency', 'NGN')
         callback_url = serializer.validated_data.get('callback_url')
+        is_recurring = serializer.validated_data.get('is_recurring', False)
 
         # Always derive amount and email from the verified order — never trust client
         order = get_object_or_404(Order, id=order_id, user=request.user)
@@ -106,14 +107,17 @@ class InitiatePaymentView(views.APIView):
         
         try:
             logger.info("payment_gateway_request_started", user_id=request.user.id, transaction_ref=transaction_ref)
-            # We enforce is_recurring=True so the token is saved for future charges
+            # TODO: We originally enforced is_recurring=True so the token is saved for future charges.
+            # Since the current Squad merchant account does not support it and returns 400 Bad Request,
+            # it has been disabled. Once the account is authorized for recurring billing, you can
+            # change the default back to True in the serializer or enforce it here again.
             squad_response = squad_service.initiate_payment(
                 amount=Decimal(str(amount)),
                 email=email,
                 transaction_ref=transaction_ref,
                 currency=currency,
                 callback_url=callback_url,
-                is_recurring=True
+                is_recurring=is_recurring
             )
 
             if squad_response.get('status') == 200:

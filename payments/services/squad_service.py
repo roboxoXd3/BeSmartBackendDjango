@@ -61,16 +61,21 @@ class SquadPaymentService:
             'callback_url': callback_url or settings.PAYMENT_CONFIG['CALLBACK_URL'],
             'is_recurring': is_recurring
         }
-        
+            
+
         if metadata:
             payload['metadata'] = metadata
         
         try:
             response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
+            if not response.ok:
+                import logging
+                logging.getLogger(__name__).error(f"squad_api_error_response {response.status_code} {response.text}")
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Squad API Error: {str(e)}")
+            text = getattr(e.response, 'text', '') if hasattr(e, 'response') else ''
+            raise Exception(f"Squad API Error: {str(e)} - {text}")
     
     def verify_transaction(self, transaction_ref: str) -> Dict:
         """
