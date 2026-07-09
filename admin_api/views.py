@@ -118,11 +118,18 @@ class VendorAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     
     def get_queryset(self):
-        from django.db.models import Count, Q
+        from django.db.models import Count, OuterRef, Subquery, IntegerField
+        from django.db.models.functions import Coalesce
+        from products.models import Product
+        
+        products_sq = Product.objects.filter(vendor_id=OuterRef('id')).values('vendor_id').annotate(count=Count('id')).values('count')
+        approved_sq = Product.objects.filter(vendor_id=OuterRef('id'), approval_status='approved').values('vendor_id').annotate(count=Count('id')).values('count')
+        pending_sq = Product.objects.filter(vendor_id=OuterRef('id'), approval_status='pending').values('vendor_id').annotate(count=Count('id')).values('count')
+        
         return Vendor.objects.select_related('user').annotate(
-            product_count_annotated=Count('products', distinct=True),
-            approved_products_annotated=Count('products', filter=Q(products__approval_status='approved'), distinct=True),
-            pending_products_annotated=Count('products', filter=Q(products__approval_status='pending'), distinct=True)
+            product_count_annotated=Coalesce(Subquery(products_sq, output_field=IntegerField()), 0),
+            approved_products_annotated=Coalesce(Subquery(approved_sq, output_field=IntegerField()), 0),
+            pending_products_annotated=Coalesce(Subquery(pending_sq, output_field=IntegerField()), 0)
         ).order_by('-created_at')
     serializer_class = VendorAdminSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -509,12 +516,50 @@ class OrderAdminFilter(django_filters.FilterSet):
 
 class OrderAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = Order.objects.select_related('user').prefetch_related('items', 'items__product', 'items__product__vendor').all().order_by('-created_at').distinct()
+    queryset = Order.objects.select_related('user').prefetch_related('items', 'items__product').all().order_by('-created_at').distinct()
     serializer_class = OrderAdminSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = OrderAdminFilter
     search_fields = ['order_number', 'user__email', 'user__first_name', 'user__last_name']
     ordering_fields = ['created_at', 'total']
+
+    def _get_serializer_with_vendors(self, order_list, many=True):
+        if not order_list:
+            return self.get_serializer(order_list, many=many)
+            
+        orders = order_list if many else [order_list]
+        order_ids = [o.id for o in orders]
+        
+        from products.models import Product
+        from vendors.models import Vendor
+        from orders.models import OrderItem
+        
+        order_item_products = OrderItem.objects.filter(order_id__in=order_ids).values_list('product_id', flat=True)
+        product_vendor_map = dict(Product.objects.filter(id__in=order_item_products).values_list('id', 'vendor_id'))
+        vendor_ids = set(product_vendor_map.values()) - {None}
+        vendors = {v.id: v for v in Vendor.objects.filter(id__in=vendor_ids)}
+        
+        context = self.get_serializer_context()
+        context['product_vendor_map'] = product_vendor_map
+        context['vendors_map'] = vendors
+        
+        return self.serializer_class(order_list, many=many, context=context)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
+        order_list = page if page is not None else queryset
+        serializer = self._get_serializer_with_vendors(order_list, many=True)
+        
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+        
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self._get_serializer_with_vendors(instance, many=False)
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Update order status",
@@ -563,7 +608,7 @@ class OrderAdminViewSet(viewsets.ModelViewSet):
 
 class PayoutAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
-    queryset = VendorPayout.objects.select_related('vendor', 'vendor__user').prefetch_related('vendor__vendorbankaccount_set').all().order_by('-requested_at')
+    queryset = VendorPayout.objects.select_related('vendor', 'vendor__user').prefetch_related('vendor__bank_accounts').all().order_by('-requested_at')
     serializer_class = PayoutAdminSerializer
 
     @extend_schema(

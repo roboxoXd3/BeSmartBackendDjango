@@ -145,13 +145,22 @@ class VendorAdminSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_product_count(self, obj):
-        return getattr(obj, 'product_count_annotated', obj.products.count() if hasattr(obj, 'products') else 0)
+        if hasattr(obj, 'product_count_annotated'):
+            return obj.product_count_annotated
+        from products.models import Product
+        return Product.objects.filter(vendor_id=obj.id).count()
 
     def get_approved_products(self, obj):
-        return getattr(obj, 'approved_products_annotated', obj.products.filter(approval_status='approved').count() if hasattr(obj, 'products') else 0)
+        if hasattr(obj, 'approved_products_annotated'):
+            return obj.approved_products_annotated
+        from products.models import Product
+        return Product.objects.filter(vendor_id=obj.id, approval_status='approved').count()
 
     def get_pending_products(self, obj):
-        return getattr(obj, 'pending_products_annotated', obj.products.filter(approval_status='pending').count() if hasattr(obj, 'products') else 0)
+        if hasattr(obj, 'pending_products_annotated'):
+            return obj.pending_products_annotated
+        from products.models import Product
+        return Product.objects.filter(vendor_id=obj.id, approval_status='pending').count()
 
 class PayoutAdminSerializer(serializers.ModelSerializer):
     vendor_business_name = serializers.CharField(source='vendor.business_name', read_only=True)
@@ -165,8 +174,8 @@ class PayoutAdminSerializer(serializers.ModelSerializer):
 
     def get_bank_details(self, obj):
         bank = None
-        if hasattr(obj.vendor, 'vendorbankaccount_set'):
-            bank_accounts = obj.vendor.vendorbankaccount_set.all()
+        if hasattr(obj.vendor, 'bank_accounts'):
+            bank_accounts = obj.vendor.bank_accounts.all()
             if bank_accounts:
                 bank = bank_accounts[0]
         if not bank:
@@ -253,14 +262,15 @@ class OrderAdminSerializer(OrderSerializer):
 
     def get_vendors(self, obj):
         try:
-            # Check if items are prefetched to avoid N+1 queries
-            is_prefetched = hasattr(obj, '_prefetched_objects_cache') and 'items' in obj._prefetched_objects_cache
-            
-            if is_prefetched:
+            ctx = self.context
+            if 'product_vendor_map' in ctx and 'vendors_map' in ctx:
+                product_vendor_map = ctx['product_vendor_map']
+                vendors_map = ctx['vendors_map']
                 vendors_dict = {}
                 for item in obj.items.all():
-                    if hasattr(item, 'product') and getattr(item.product, 'vendor', None):
-                        v = item.product.vendor
+                    vendor_id = product_vendor_map.get(item.product_id)
+                    if vendor_id and vendor_id in vendors_map:
+                        v = vendors_map[vendor_id]
                         if v.id not in vendors_dict:
                             vendors_dict[v.id] = {
                                 "id": v.id,
@@ -270,7 +280,7 @@ class OrderAdminSerializer(OrderSerializer):
                 if vendors_dict:
                     return list(vendors_dict.values())
                     
-            # Fallback for when relations aren't prefetched
+            # Fallback for when relations aren't context-cached
             from products.models import Product
             from vendors.models import Vendor
             product_ids = obj.items.values_list('product_id', flat=True)

@@ -29,7 +29,9 @@ def get_optimized_product_queryset(base_qs):
         'id', 'name', 'price', 'images', 'rating', 'reviews', 'in_stock',
         'discount_percentage', 'is_on_sale', 'sale_price', 'is_featured',
         'is_new_arrival', 'sku', 'status', 'stock_quantity', 'category_id',
-        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date', 'vendor_id'
+        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date', 'vendor_id',
+        'description', 'approval_status', 'rejection_reason', 'video_url',
+        'colors', 'subtitle', 'brand', 'mrp', 'currency', 'created_at'
     )
     return qs
 
