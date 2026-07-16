@@ -96,26 +96,25 @@ class SquadPaymentService:
         except requests.exceptions.RequestException as e:
             raise Exception(f"Squad Verification Error: {str(e)}")
     
-    def validate_webhook_signature(self, payload: Dict, signature: str) -> bool:
+    def validate_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """
         Validate webhook signature from Squad
         
         Args:
-            payload: Webhook payload
+            payload: Raw webhook payload (request.body)
             signature: Signature from x-squad-encrypted-body header
         
         Returns:
             Boolean indicating if signature is valid
         """
-        payload_string = json.dumps(payload, separators=(',', ':'))
         
         computed_signature = hmac.new(
             self.webhook_secret.encode('utf-8'),
-            payload_string.encode('utf-8'),
+            payload,
             hashlib.sha512
-        ).hexdigest()
+        ).hexdigest().upper()
         
-        return hmac.compare_digest(computed_signature, signature)
+        return hmac.compare_digest(computed_signature, signature.upper())
 
     def charge_card_with_token(
         self,

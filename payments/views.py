@@ -225,7 +225,7 @@ class PaymentWebhookView(views.APIView):
         signature = request.headers.get('x-squad-encrypted-body')
         
         # Validate signature
-        if not signature or not squad_service.validate_webhook_signature(request.data, signature):
+        if not signature or not squad_service.validate_webhook_signature(request.body, signature):
             return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 
         event = request.data.get('Event', '')
