@@ -2,8 +2,16 @@ from rest_framework import authentication
 from rest_framework import exceptions
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from supabase import create_client
 
 User = get_user_model()
+
+def get_supabase_client():
+    url = settings.SUPABASE_URL
+    key = settings.SUPABASE_KEY
+    if not url or not key:
+        raise ValueError("Supabase credentials not configured.")
+    return create_client(url, key)
 
 try:
     from drf_spectacular.extensions import OpenApiAuthenticationExtension
@@ -46,16 +54,6 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             return None
 
         try:
-            from django.conf import settings
-            from supabase import create_client
-            
-            def get_supabase_client():
-                url = settings.SUPABASE_URL
-                key = settings.SUPABASE_KEY
-                if not url or not key:
-                    raise ValueError("Supabase credentials not configured.")
-                return create_client(url, key)
-                
             supabase = get_supabase_client()
 
             user_response = supabase.auth.get_user(token)
