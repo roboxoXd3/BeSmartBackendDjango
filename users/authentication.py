@@ -46,9 +46,17 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             return None
 
         try:
-            from supabase import create_client
             from django.conf import settings
-            supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            from supabase import create_client
+            
+            def get_supabase_client():
+                url = settings.SUPABASE_URL
+                key = settings.SUPABASE_KEY
+                if not url or not key:
+                    raise ValueError("Supabase credentials not configured.")
+                return create_client(url, key)
+                
+            supabase = get_supabase_client()
 
             user_response = supabase.auth.get_user(token)
             user_data = user_response.user
@@ -66,5 +74,6 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             return (user, None)
 
         except Exception as e:
-            print(f"DEBUG: Supabase token validation failed (treating as anonymous): {e}")
+            # Ignoring the print to avoid IOError in background processes
+            pass
             return None

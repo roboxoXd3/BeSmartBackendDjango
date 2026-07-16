@@ -1,4 +1,5 @@
-from rest_framework import generics, permissions, status, views, viewsets
+from rest_framework import generics, permissions, status, views, viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -7,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from products.models import Product, ProductReview, ProductQuestion
 from orders.models import Order
-from orders.serializers import OrderSerializer
+from orders.serializers import OrderSerializer, VendorOrderSerializer
 from products.serializers import (
     ProductListSerializer, ProductDetailSerializer,
     ProductReviewSerializer, ProductQuestionSerializer
@@ -15,7 +16,7 @@ from products.serializers import (
 from .models import (
     Vendor, VendorReview, VendorBankAccount, VendorPayout,
     VendorFollow, PayoutTransaction, SubscriptionPlan, VendorSubscription,
-    VendorSizeChartTemplate, VendorSessions
+    VendorSizeChartTemplate, VendorSessions, EscrowTransaction
 )
 from .serializers import (
     VendorSerializer, VendorRegisterSerializer, VendorReviewSerializer,
@@ -28,6 +29,9 @@ from .serializers import (
 from drf_spectacular.utils import extend_schema, OpenApiParameter, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
+
+from besmart_backend.utils.logger import get_logger
+logger = get_logger(__name__)
 
 # ============ Customer-facing Vendor APIs (Phase 2) ============
 
@@ -58,6 +62,7 @@ class VendorSearchView(generics.ListAPIView):
     serializer_class = VendorListSerializer
 
     def get_queryset(self):
+        from django.db.models import Q
         q = self.request.query_params.get('q', '').strip()
         qs = _approved_vendors()
         if q:
@@ -273,7 +278,9 @@ class VendorRegisterView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        logger.info("vendor_registration_started", user_id=self.request.user.id)
+        vendor = serializer.save(user=self.request.user)
+        logger.info("vendor_registered", vendor_id=vendor.id, user_id=self.request.user.id)
 
 class VendorProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -297,49 +304,102 @@ class VendorKYCStatusView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
+        docs = vendor.verification_documents or {}
+        # Migrate legacy list format to dict for consistent response
+        if isinstance(docs, list):
+            migrated = {}
+            for doc in docs:
+                doc_type = doc.get('type', 'unknown')
+                migrated[doc_type] = doc
+            docs = migrated
         return Response({
             "verification_status": vendor.verification_status,
-            "verification_documents": vendor.verification_documents or []
+            "verification_documents": docs
         })
+
+class VendorResubmitView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Resubmit rejected vendor application",
+        responses={200: inline_serializer("VendorResubmitResponse", fields={"status": serializers.CharField(), "message": serializers.CharField()})}
+    )
+    def post(self, request):
+        vendor = get_object_or_404(Vendor, user=request.user)
+        if vendor.status != 'rejected':
+            return Response({"error": "Only rejected applications can be resubmitted."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        vendor.status = 'pending'
+        vendor.verification_status = 'pending'
+        vendor.rejection_reason = None
+        vendor.admin_notes = None
+        vendor.save(update_fields=['status', 'verification_status', 'rejection_reason', 'admin_notes'])
+        
+        return Response({"status": "success", "message": "Application resubmitted successfully."})
 
 class VendorKYCUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
 
     @extend_schema(
-        summary="Upload product image",
-        request=inline_serializer(name="VendorProductImageUploadReq", fields={"image": serializers.FileField()}),
+        summary="Upload KYC document",
+        request=inline_serializer(name="VendorKYCUploadReq", fields={
+            "document": serializers.FileField(),
+            "document_type": serializers.CharField(help_text="Required. e.g., id_proof, business_license, address_proof")
+        }),
         responses={200: inline_serializer(
-            name="VendorProductImageUploadResponse",
+            name="VendorKYCUploadResponse",
             fields={
                 "message": serializers.CharField(),
                 "file_url": serializers.CharField(),
-                "images": serializers.ListField(child=serializers.CharField())
+                "documents": serializers.DictField(child=serializers.DictField())
             }
         )}
     )
     def post(self, request):
+        logger.info("vendor_kyc_upload_started", user_id=request.user.id)
         vendor = get_object_or_404(Vendor, user=request.user)
         file_obj = request.FILES.get('document')
+        document_type = request.data.get('document_type', '').strip()
+        
         if not file_obj:
             return Response({"error": "No document provided."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not document_type:
+            return Response({"error": "document_type is required (e.g., id_proof, business_license, address_proof)."}, status=status.HTTP_400_BAD_REQUEST)
         
         file_name = default_storage.save(f"kyc/{vendor.id}/{file_obj.name}", file_obj)
         file_url = default_storage.url(file_name)
         
-        docs = vendor.verification_documents or []
-        docs.append({"name": file_obj.name, "url": file_url, "uploaded_at": timezone.now().isoformat()})
+        # Store as dict keyed by document_type
+        docs = vendor.verification_documents or {}
+        # Migrate legacy list format to dict if needed
+        if isinstance(docs, list):
+            migrated = {}
+            for doc in docs:
+                doc_type = doc.get('type', 'unknown')
+                migrated[doc_type] = doc
+            docs = migrated
+        
+        docs[document_type] = {
+            "name": file_obj.name,
+            "url": file_url,
+            "uploaded_at": timezone.now().isoformat()
+        }
         
         vendor.verification_documents = docs
-        if vendor.verification_status == 'unverified' or vendor.verification_status == 'rejected':
+        if vendor.verification_status in ('unverified', 'rejected'):
             vendor.verification_status = 'pending'
-        vendor.save()
+            vendor.status = 'pending'
+        vendor.save(update_fields=['verification_documents', 'verification_status', 'status'])
+        
+        logger.info("vendor_kyc_upload_completed", vendor_id=vendor.id, document_type=document_type)
         
         return Response({
             "message": "Document uploaded successfully.",
-            "verification_status": vendor.verification_status,
-            "documents": vendor.verification_documents
-        }, status=status.HTTP_200_OK)
+            "file_url": file_url,
+            "documents": docs
+        })
 
 class VendorDashboardStatsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -373,10 +433,21 @@ class VendorDashboardStatsView(views.APIView):
         elif period == '1y': start_date = now - timedelta(days=365)
         
         from orders.models import Order
-        orders = Order.objects.filter(vendor_id=vendor.id, created_at__gte=start_date)
+        all_orders = Order.objects.filter(vendor_id=vendor.id)
         
-        total_sales = orders.filter(status__in=['delivered', 'shipped', 'confirmed']).aggregate(total=Sum('total'))['total'] or 0.00
-        pending_orders = orders.filter(status='pending').count()
+        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        from django.db.models import Sum, Count, Q
+        metrics = all_orders.aggregate(
+            total_sales=Sum('total', filter=Q(status__in=['delivered', 'shipped', 'confirmed'])),
+            monthly_revenue=Sum('total', filter=Q(status__in=['delivered', 'shipped', 'confirmed'], created_at__gte=current_month_start)),
+            pending_orders=Count('id', filter=Q(status='pending'))
+        )
+        
+        total_sales = metrics['total_sales'] or 0.00
+        monthly_revenue = metrics['monthly_revenue'] or 0.00
+        pending_orders = metrics['pending_orders'] or 0
+        
         total_products = Product.objects.filter(vendor_id=vendor.id).count()
         
         # Follower count
@@ -384,13 +455,42 @@ class VendorDashboardStatsView(views.APIView):
         
         return Response({
             "totalProducts": total_products,
-            "totalOrders": orders.count(),
+            "totalOrders": all_orders.count(),
             "totalSales": total_sales,
             "pendingOrders": pending_orders,
             "followerCount": follower_count,
             "currency": "NGN",
-            "monthlyRevenue": total_sales # Simple mapping for the dashboard spec
+            "monthlyRevenue": monthly_revenue
         })
+class VendorAnalyticsViewsOverTimeView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Vendor product views over time",
+        parameters=[OpenApiParameter('period', OpenApiTypes.STR, description='Period e.g., 7d, 30d', required=False)]
+    )
+    def get(self, request):
+        from django.db.models import Count
+        from django.utils import timezone
+        from datetime import timedelta
+        from products.models import ProductViews
+        
+        vendor = get_object_or_404(Vendor, user=request.user)
+        period_str = request.query_params.get('period', '30d')
+        days = 30
+        if period_str.endswith('d') and period_str[:-1].isdigit():
+            days = int(period_str[:-1])
+            
+        start_date = timezone.now() - timedelta(days=days)
+        vendor_products = Product.objects.filter(vendor_id=vendor.id).values_list('id', flat=True)
+        
+        views_qs = ProductViews.objects.filter(
+            product_id__in=vendor_products, 
+            created_at__gte=start_date
+        ).values('created_at__date').annotate(count=Count('id')).order_by('created_at__date')
+        
+        data = [{'date': v['created_at__date'].isoformat() if hasattr(v['created_at__date'], 'isoformat') else str(v['created_at__date']), 'views': v['count']} for v in views_qs]
+        return Response({'data': data})
 
 class VendorAnalyticsSalesView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -417,7 +517,8 @@ class VendorAnalyticsSalesView(views.APIView):
         from django.utils import timezone
         from datetime import timedelta
         from django.db.models.functions import TruncDate
-        
+        from django.db.models import Sum, Count
+
         days = 30
         if period == '7d': days = 7
         elif period == '90d': days = 90
@@ -467,11 +568,29 @@ class VendorAnalyticsMetricsView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
+        
+        from orders.models import Order
+        from .models import ProductAnalyticsEvent
+        from django.db.models import Count, Q
+        
+        total_orders = Order.objects.filter(vendor_id=vendor.id).count()
+        returned_orders = Order.objects.filter(vendor_id=vendor.id, status__in=['refunded', 'returned']).count()
+        return_rate = round(returned_orders / total_orders, 4) if total_orders > 0 else 0.0
+        
+        # Compute real conversion rate from analytics events (views → purchases)
+        event_counts = ProductAnalyticsEvent.objects.filter(vendor=vendor).aggregate(
+            total_views=Count('id', filter=Q(event_type='view')),
+            total_purchases=Count('id', filter=Q(event_type='purchase'))
+        )
+        total_views = event_counts['total_views'] or 0
+        total_purchases = event_counts['total_purchases'] or 0
+        conversion_rate = round(total_purchases / total_views, 4) if total_views > 0 else 0.0
+        
         return Response({
             "average_rating": vendor.average_rating,
             "total_reviews": vendor.total_reviews,
-            "conversion_rate": 0.05,  # Placeholder/mocked for now
-            "return_rate": 0.01,
+            "conversion_rate": conversion_rate,
+            "return_rate": return_rate,
         })
         
 class VendorCustomerLocationsView(views.APIView):
@@ -483,14 +602,26 @@ class VendorCustomerLocationsView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
-        # Assuming we join Order with ShippingAddress to get state/city
-        # Just mock a basic aggregation since address_id is stored directly on Order
-        return Response({
-            "locations": [
-                {"region": "Lagos", "count": vendor.total_orders},
-                {"region": "Abuja", "count": 0}
-            ]
-        })
+        from orders.models import Order, ShippingAddress
+        from django.db.models import Count
+        
+        # Order.address_id is a plain UUIDField (not a FK), so we query in two steps
+        address_ids = (
+            Order.objects.filter(vendor_id=vendor.id)
+            .exclude(address_id__isnull=True)
+            .values_list('address_id', flat=True)
+        )
+        
+        locations = (
+            ShippingAddress.objects.filter(id__in=address_ids)
+            .values('state')
+            .annotate(customers=Count('user', distinct=True))
+            .order_by('-customers')
+        )
+        
+        data = [{'region': loc['state'] or 'Unknown', 'customers': loc['customers']} for loc in locations]
+            
+        return Response(data)
 
 class VendorBankAccountViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -515,6 +646,7 @@ class VendorPayoutListView(generics.ListCreateAPIView):
         return VendorPayout.objects.filter(vendor__user=self.request.user).order_by('-requested_at')
 
     def perform_create(self, serializer):
+        logger.info("vendor_payout_started", user_id=self.request.user.id)
         vendor = get_object_or_404(Vendor, user=self.request.user)
         
         # 1. Check Balance
@@ -532,7 +664,6 @@ class VendorPayoutListView(generics.ListCreateAPIView):
         
         from django.db.models import Sum
         from decimal import Decimal
-        from .models import EscrowTransaction
         
         released = EscrowTransaction.objects.filter(
             vendor=vendor, 
@@ -581,17 +712,20 @@ class VendorPayoutListView(generics.ListCreateAPIView):
             
             if response.get('status') == 200 and not response.get('error'):
                  # Squad might return success even if pending
-                 serializer.save(
+                 payout = serializer.save(
                      vendor=vendor, 
                      status='processing',
                      squad_transaction_ref=transaction_ref,
                      bank_account=bank_account
                  )
+                 logger.info("vendor_payout_initiated", vendor_id=vendor.id, amount=amount, payout_id=payout.id, ref=transaction_ref)
             else:
+                 logger.error("vendor_payout_failed", vendor_id=vendor.id, amount=amount, reason=response.get('message'))
                  from rest_framework.exceptions import APIException
                  raise APIException(f"Transfer failed: {response.get('message')}")
                  
         except Exception as e:
+             logger.error("vendor_payout_error", vendor_id=vendor.id, amount=amount, error=str(e))
              from rest_framework.exceptions import APIException
              raise APIException(f"Payout processing error: {str(e)}")
 
@@ -653,6 +787,22 @@ class VendorSizeChartTemplateViewSet(viewsets.ModelViewSet):
 
 class VendorOwnProductViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['category_id', 'status', 'approval_status']
+    search_fields = ['name', 'sku']
+    ordering_fields = ['name', 'price', 'added_date']
+
+    @extend_schema(summary="Get aggregate statistics for vendor products")
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        from django.db.models import Count, Q
+        stats = self.get_queryset().aggregate(
+            totalProducts=Count('id'),
+            activeProducts=Count('id', filter=Q(status='active')),
+            outOfStock=Count('id', filter=Q(in_stock=False) | Q(stock_quantity=0)),
+            featuredProducts=Count('id', filter=Q(is_featured=True))
+        )
+        return Response(stats)
 
     @extend_schema(request=inline_serializer("VendorProductUploadImageReq", {"image": serializers.ImageField()}))
 
@@ -660,7 +810,9 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Product.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
-        return Product.objects.filter(vendor_id=vendor.id).order_by('-added_date')
+        qs = Product.objects.filter(vendor_id=vendor.id).order_by('-added_date')
+        from products.views import get_optimized_product_queryset
+        return get_optimized_product_queryset(qs)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -668,8 +820,10 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         return ProductDetailSerializer
 
     def perform_create(self, serializer):
+        logger.info("vendor_product_creation_started", user_id=self.request.user.id)
         vendor = get_object_or_404(Vendor, user=self.request.user)
-        serializer.save(vendor_id=vendor.id)
+        product = serializer.save(vendor_id=vendor.id, approval_status='pending')
+        logger.info("product_created", vendor_id=vendor.id, product_id=product.id)
 
     @extend_schema(
         summary="Update stock quantity",
@@ -705,22 +859,72 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         return Response({"message": "Image uploaded", "images": file_url})
 
     @extend_schema(
-        summary="Bulk upsert products",
-        request=inline_serializer(name="BulkUpsertReq", fields={"products": serializers.ListField(child=serializers.DictField())}),
-        responses={200: inline_serializer(name="BulkUpsertRes", fields={"message": serializers.CharField(), "updated_count": serializers.IntegerField(), "created_count": serializers.IntegerField()})}
+        summary="Bulk upsert products (JSON list or CSV file)",
+        request=inline_serializer(name="BulkUpsertReq", fields={
+            "products": serializers.ListField(child=serializers.DictField(), required=False, help_text="JSON list of product dicts"),
+            "file": serializers.FileField(required=False, help_text="CSV file with product data")
+        }),
+        responses={200: inline_serializer(name="BulkUpsertRes", fields={
+            "message": serializers.CharField(),
+            "updated_count": serializers.IntegerField(),
+            "created_count": serializers.IntegerField(),
+            "errors": serializers.ListField(child=serializers.DictField())
+        })}
     )
-    @action(detail=False, methods=['post'], url_path='bulk-upload')
+    @action(detail=False, methods=['post'], url_path='bulk-upload', parser_classes=[MultiPartParser, FormParser])
     def bulk_upload(self, request):
+        import csv
+        import io
+        
         vendor = get_object_or_404(Vendor, user=self.request.user)
-        products_data = request.data.get('products', [])
+        
+        # Determine input source: CSV file or JSON list
+        csv_file = request.FILES.get('file')
+        products_data = []
+        
+        if csv_file:
+            # Parse CSV file
+            try:
+                decoded = csv_file.read().decode('utf-8-sig')
+                reader = csv.DictReader(io.StringIO(decoded))
+                for row in reader:
+                    # Clean up empty strings to None
+                    cleaned = {k.strip(): (v.strip() if v and v.strip() else None) for k, v in row.items() if k}
+                    products_data.append(cleaned)
+            except (UnicodeDecodeError, csv.Error) as e:
+                return Response({'error': f'Invalid CSV file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            products_data = request.data.get('products', [])
         
         if not products_data:
-            return Response({'error': 'No products provided'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'No products provided. Send a JSON "products" list or upload a CSV "file".'}, status=status.HTTP_400_BAD_REQUEST)
             
         updated_count = 0
         created_count = 0
+        errors = []
         
-        for p_data in products_data:
+        # CSV column mapping — convert CSV-friendly types
+        numeric_fields = {'price', 'stock_quantity', 'discount_percentage', 'sale_price', 'mrp'}
+        boolean_fields = {'in_stock', 'is_on_sale', 'is_featured', 'is_new_arrival', 'cod_allowed'}
+        
+        for idx, p_data in enumerate(products_data):
+            row_num = idx + 1
+            
+            # Type coercion for CSV rows
+            if csv_file:
+                for field in numeric_fields:
+                    if field in p_data and p_data[field] is not None:
+                        try:
+                            p_data[field] = float(p_data[field])
+                            if field == 'stock_quantity':
+                                p_data[field] = int(p_data[field])
+                        except (ValueError, TypeError):
+                            errors.append({'row': row_num, 'field': field, 'error': f'Invalid number: {p_data[field]}'})
+                            continue
+                for field in boolean_fields:
+                    if field in p_data and p_data[field] is not None:
+                        p_data[field] = str(p_data[field]).lower() in ('true', '1', 'yes', 'y')
+            
             product_id = p_data.get('id')
             if product_id:
                 try:
@@ -729,18 +933,24 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
                     if serializer.is_valid():
                         serializer.save()
                         updated_count += 1
+                    else:
+                        errors.append({'row': row_num, 'id': str(product_id), 'errors': serializer.errors})
                 except Product.DoesNotExist:
-                    pass
+                    errors.append({'row': row_num, 'id': str(product_id), 'error': 'Product not found or not owned by this vendor'})
             else:
                 serializer = ProductDetailSerializer(data=p_data)
                 if serializer.is_valid():
-                    serializer.save(vendor_id=vendor.id)
+                    serializer.save(vendor_id=vendor.id, approval_status='pending')
                     created_count += 1
+                else:
+                    errors.append({'row': row_num, 'errors': serializer.errors})
                     
+        logger.info("products_bulk_uploaded", vendor_id=vendor.id, created_count=created_count, updated_count=updated_count, error_count=len(errors))
         return Response({
             'message': 'Bulk upsert completed',
             'updated_count': updated_count,
-            'created_count': created_count
+            'created_count': created_count,
+            'errors': errors
         })
 
     @extend_schema(
@@ -750,11 +960,23 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['patch'], url_path='size-chart-visibility')
     def size_chart_visibility(self, request, pk=None):
-        return Response({'status': 'size chart visibility updated'})
+        product = self.get_object()
+        visible = request.data.get('visible')
+        if visible is not None:
+            product.size_chart_visible = str(visible).lower() in ['true', '1', 't', 'y', 'yes']
+            product.save(update_fields=['size_chart_visible'])
+            return Response({'status': 'size chart visibility updated', 'size_chart_visible': product.size_chart_visible})
+        return Response({'error': 'visible field is required'}, status=status.HTTP_400_BAD_REQUEST)
 
 class VendorOrderViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = OrderSerializer
+    serializer_class = VendorOrderSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = {
+        'status': ['exact'],
+        'created_at': ['gte', 'lte']
+    }
+    ordering_fields = ['created_at', 'total']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -797,6 +1019,8 @@ class VendorOrderViewSet(viewsets.ReadOnlyModelViewSet):
             order.notes = notes
             
         order.save(update_fields=['status', 'tracking_number', 'notes', 'updated_at'])
+        
+        logger.info("order_status_updated", vendor_id=order.vendor_id, order_id=order.id, new_status=order.status)
         return Response({'status': 'order updated', 'order_status': order.status})
 
 class VendorEscrowDummy(serializers.Serializer):
@@ -807,7 +1031,6 @@ class VendorEscrowViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = VendorEscrowDummy
     
     def get_queryset(self):
-        from .models import EscrowTransaction
         if getattr(self, 'swagger_fake_view', False):
             return EscrowTransaction.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
@@ -823,10 +1046,11 @@ class VendorEscrowViewSet(viewsets.ReadOnlyModelViewSet):
         responses={200: inline_serializer(name="VendorEscrowListRes", fields={"data": serializers.ListField(child=serializers.DictField())})}
     )
     def list(self, request, *args, **kwargs):
-        qs = self.get_queryset()
+        qs = self.get_queryset().select_related('order__user')
         data = [{
             "id": str(e.id),
             "order_id": str(e.order_id),
+            "customer_name": f"{e.order.user.first_name} {e.order.user.last_name}".strip() if e.order and e.order.user else "",
             "amount": float(e.amount),
             "status": e.status,
             "release_date": e.release_date.isoformat() if e.release_date else None,
@@ -880,7 +1104,8 @@ class VendorPayoutSummaryView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
-        
+        from django.db.models import Sum
+
         released = EscrowTransaction.objects.filter(
             vendor=vendor, status='released'
         ).aggregate(total=Sum('amount'))['total'] or 0.00
@@ -908,6 +1133,7 @@ class VendorProductReviewViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductReviewSerializer
     
     def get_queryset(self):
+        from django.db.models import Q
         if getattr(self, 'swagger_fake_view', False):
             return ProductReview.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
@@ -956,6 +1182,7 @@ class VendorProductQAViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductQuestionSerializer
 
     def get_queryset(self):
+        from django.db.models import Q
         if getattr(self, 'swagger_fake_view', False):
             return ProductQuestion.objects.none()
         vendor = get_object_or_404(Vendor, user=self.request.user)
@@ -991,7 +1218,7 @@ class VendorProductQAViewSet(viewsets.ReadOnlyModelViewSet):
         elif action_type == 'hide':
             qa.status = 'hidden'
         elif action_type == 'show':
-            qa.status = 'published'
+            qa.status = 'answered'
             
         qa.save()
         return Response(self.get_serializer(qa).data)
@@ -1005,3 +1232,93 @@ class VendorSessionViewSet(viewsets.ModelViewSet):
     queryset = VendorSessions.objects.all()
     serializer_class = VendorSessionSerializer
     lookup_field = 'session_token'
+
+class VendorAnalyticsTrackView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        summary="Track product event",
+        request=inline_serializer("VendorAnalyticsTrackReq", fields={"product_id": serializers.UUIDField(), "event_type": serializers.CharField()}),
+        responses={200: inline_serializer("VendorAnalyticsTrackRes", fields={"status": serializers.CharField()})}
+    )
+    def post(self, request):
+        product_id = request.data.get('product_id')
+        event_type = request.data.get('event_type')
+        if not product_id or not event_type:
+            return Response({"error": "Missing product_id or event_type"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        product = get_object_or_404(Product, id=product_id)
+        from .models import ProductAnalyticsEvent
+        ProductAnalyticsEvent.objects.create(vendor_id=product.vendor_id, product_id=product.id, event_type=event_type)
+        return Response({"status": "success"})
+
+class VendorAnalyticsFunnelView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Vendor analytics funnel",
+        responses={200: inline_serializer("VendorAnalyticsFunnelRes", fields={
+            "views": serializers.IntegerField(),
+            "cart": serializers.IntegerField(),
+            "checkout": serializers.IntegerField(),
+            "purchases": serializers.IntegerField()
+        })}
+    )
+    def get(self, request):
+        vendor = get_object_or_404(Vendor, user=request.user)
+        from .models import ProductAnalyticsEvent
+        from django.db.models import Count
+        events = ProductAnalyticsEvent.objects.filter(vendor=vendor).values('event_type').annotate(count=Count('id'))
+        event_counts = {item['event_type']: item['count'] for item in events}
+        return Response({
+            "views": event_counts.get('view', 0),
+            "cart": event_counts.get('cart', 0),
+            "checkout": event_counts.get('checkout', 0),
+            "purchases": event_counts.get('purchase', 0)
+        })
+
+class VendorAnalyticsPerformanceView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Vendor product performance",
+        responses={200: inline_serializer("VendorAnalyticsPerformanceRes", fields={
+            "data": serializers.ListField(child=serializers.DictField())
+        })}
+    )
+    def get(self, request):
+        vendor = get_object_or_404(Vendor, user=request.user)
+        from .models import ProductAnalyticsEvent
+        from django.db.models import Count, Q
+        
+        # Get counts per product
+        product_stats = ProductAnalyticsEvent.objects.filter(vendor=vendor).values('product_id').annotate(
+            views=Count('id', filter=Q(event_type='view')),
+            purchases=Count('id', filter=Q(event_type='purchase')),
+            cart=Count('id', filter=Q(event_type='cart'))
+        )
+        
+        product_ids = [stat['product_id'] for stat in product_stats]
+        products = Product.objects.filter(id__in=product_ids)
+        product_map = {p.id: p for p in products}
+        
+        data = []
+        for stat in product_stats:
+            p = product_map.get(stat['product_id'])
+            if p:
+                views = stat['views']
+                purchases = stat['purchases']
+                conversion = round((purchases / views * 100), 2) if views > 0 else 0.0
+                data.append({
+                    "product_id": str(p.id),
+                    "name": p.name,
+                    "views": views,
+                    "cart": stat['cart'],
+                    "purchases": purchases,
+                    "conversion_rate": conversion,
+                    "price": float(p.price)
+                })
+        
+        # Sort by views
+        data.sort(key=lambda x: x['views'], reverse=True)
+        return Response({"data": data})

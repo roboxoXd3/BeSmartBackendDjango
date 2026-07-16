@@ -3,12 +3,12 @@ Intent Recognition Service — mirrors mobile UjunwaAIService._recognizeIntent()
 Uses OpenAI GPT-4o-mini for intent classification with keyword fallback.
 """
 import json
-import logging
+from besmart_backend.utils.logger import get_logger
 
 from openai import OpenAI
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 INTENT_TYPES = [
     'product_search',
@@ -54,7 +54,7 @@ def recognize_intent(message: str) -> dict:
     try:
         return _recognize_with_ai(message)
     except Exception as e:
-        logger.warning('AI intent recognition failed, using keyword fallback: %s', e)
+        logger.warning('ai_intent_recognition_failed', reason='using_keyword_fallback', error=str(e))
         return _recognize_with_keywords(message)
 
 
@@ -63,7 +63,7 @@ def _recognize_with_ai(message: str) -> dict:
     if not api_key:
         raise ValueError('OPENAI_API_KEY not configured')
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=20.0)
     response = client.chat.completions.create(
         model='gpt-4o-mini',
         messages=[

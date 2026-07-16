@@ -42,8 +42,8 @@ class SupportMessage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ticket = models.ForeignKey(SupportTicket, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(User, on_delete=models.CASCADE) # Vendor user or Admin user
-    sender_role = models.TextField()
-    message_content = models.TextField()
+    sender_role = models.TextField(default='')
+    message_content = models.TextField(default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

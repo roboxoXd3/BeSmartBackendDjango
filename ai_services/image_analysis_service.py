@@ -5,13 +5,13 @@ Sends base64 image to OpenAI GPT-4o-mini Vision API and returns a product
 description string suitable for search.
 """
 import base64
-import logging
+from besmart_backend.utils.logger import get_logger
 import time
 
 from openai import OpenAI
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 IMAGE_ANALYSIS_PROMPT = """Analyze this image and describe what product the user is looking for. 
 Focus on:
@@ -48,7 +48,7 @@ def analyze_image(image_bytes: bytes, content_type: str = 'image/jpeg') -> str:
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=api_key, timeout=20.0)
             response = client.chat.completions.create(
                 model='gpt-4o-mini',
                 messages=[
@@ -64,11 +64,11 @@ def analyze_image(image_bytes: bytes, content_type: str = 'image/jpeg') -> str:
                 temperature=0.3,
             )
             description = response.choices[0].message.content.strip()
-            logger.info('Image analysis result: %s', description)
+            logger.info('image_analysis_success', description=description)
             return description
 
         except Exception as e:
-            logger.warning('Image analysis attempt %d/%d failed: %s', attempt, MAX_RETRIES, e)
+            logger.warning('image_analysis_attempt_failed', attempt=attempt, max_retries=MAX_RETRIES, error=str(e))
             if attempt < MAX_RETRIES:
                 time.sleep(1 * attempt)  # exponential backoff
 

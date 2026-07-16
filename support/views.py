@@ -1,7 +1,8 @@
-import logging
+from besmart_backend.utils.logger import get_logger
 import uuid as uuid_module
 
-from rest_framework import generics, permissions, status, views, viewsets
+from rest_framework import generics, permissions, status, views, viewsets, filters
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -18,11 +19,14 @@ from vendors.models import Vendor
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
 from rest_framework import serializers
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class SupportTicketViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = SupportTicketSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['status', 'priority']
+    search_fields = ['subject', 'description']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -34,19 +38,30 @@ class SupportTicketViewSet(viewsets.ModelViewSet):
         vendor = get_object_or_404(Vendor, user=self.request.user)
         serializer.save(vendor=vendor)
 
-class SupportMessageView(generics.CreateAPIView):
+class SupportMessageView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = SupportMessageSerializer
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            from .models import SupportMessage
+            return SupportMessage.objects.none()
+        ticket_id = self.kwargs.get('ticket_id')
+        ticket = get_object_or_404(SupportTicket, id=ticket_id)
+        if ticket.vendor.user != self.request.user:
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to view messages for this ticket.")
+        from .models import SupportMessage
+        return SupportMessage.objects.filter(ticket=ticket).order_by('created_at')
 
     def perform_create(self, serializer):
         ticket_id = self.kwargs.get('ticket_id')
         ticket = get_object_or_404(SupportTicket, id=ticket_id)
         # Verify ownership
         if ticket.vendor.user != self.request.user:
-            # In real app, Admin should also be able to post.
-            # Assuming simplified logic where only vendor posts for now via this endpoint
-             pass 
-        serializer.save(ticket=ticket, sender=self.request.user)
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied("You do not have permission to post messages to this ticket.")
+        serializer.save(ticket=ticket, sender=self.request.user, sender_role='vendor')
 
 class ChatConversationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -242,7 +257,7 @@ class UjunwaSendMessageView(views.APIView):
                 products_mentioned=product_uuids,
             )
         except Exception as e:
-            logger.warning('Failed to store conversation context: %s', e)
+            logger.warning('conversation_context_store_failed', error=str(e))
 
         # 11. Track analytics
         try:
@@ -256,7 +271,7 @@ class UjunwaSendMessageView(views.APIView):
                 },
             )
         except Exception as e:
-            logger.warning('Failed to store analytics: %s', e)
+            logger.warning('analytics_store_failed', error=str(e))
 
         # 12. Serialize products for response (same shape mobile expects)
         serialized_products = _serialize_products_for_response(products)

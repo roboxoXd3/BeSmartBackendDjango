@@ -267,3 +267,24 @@ class VendorSessions(models.Model):
     class Meta:
         db_table = 'vendor_sessions'
 
+class ProductAnalyticsEvent(models.Model):
+    EVENT_TYPE_CHOICES = (
+        ('view', 'View'),
+        ('cart', 'Cart'),
+        ('checkout', 'Checkout'),
+        ('purchase', 'Purchase'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor = models.ForeignKey('Vendor', on_delete=models.CASCADE, related_name='analytics_events')
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='analytics_events')
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'product_analytics_events'
+        indexes = [
+            models.Index(fields=['vendor', 'event_type', 'created_at']),
+            models.Index(fields=['product', 'event_type', 'created_at']),
+        ]
+

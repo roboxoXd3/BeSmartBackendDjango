@@ -14,14 +14,24 @@ from django.db.models import Subquery, OuterRef
 from categories.models import Category
 from .pagination import ProductCursorPagination
 
+from besmart_backend.utils.logger import get_logger
+logger = get_logger(__name__)
+
 def get_optimized_product_queryset(base_qs):
     category_name_sq = Category.objects.filter(id=OuterRef('category_id')).values('name')[:1]
-    qs = base_qs.annotate(category_name=Subquery(category_name_sq))
+    from vendors.models import Vendor
+    vendor_name_sq = Vendor.objects.filter(id=OuterRef('vendor_id')).values('business_name')[:1]
+    qs = base_qs.annotate(
+        category_name=Subquery(category_name_sq),
+        vendor_name_annotated=Subquery(vendor_name_sq)
+    )
     qs = qs.only(
         'id', 'name', 'price', 'images', 'rating', 'reviews', 'in_stock',
         'discount_percentage', 'is_on_sale', 'sale_price', 'is_featured',
         'is_new_arrival', 'sku', 'status', 'stock_quantity', 'category_id',
-        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date'
+        'subcategory_id', 'sizes', 'base_currency', 'cod_allowed', 'added_date', 'vendor_id',
+        'description', 'approval_status', 'rejection_reason', 'video_url',
+        'colors', 'subtitle', 'brand', 'mrp', 'currency', 'created_at'
     )
     return qs
 
@@ -187,14 +197,19 @@ class ProductViewTrackView(views.APIView):
     )
     def post(self, request, id):
         product = get_object_or_404(Product, id=id, status='active', approval_status='approved')
+        user_id = request.user.id if request.user.is_authenticated else None
+        logger.info("product_view_tracking_started", product_id=id, user_id=user_id)
         try:
             with connection.cursor() as c:
                 c.execute("""
                     INSERT INTO product_views (id, product_id, user_id, created_at)
                     VALUES (gen_random_uuid(), %s, %s, NOW())
                 """, [str(product.id), str(request.user.id) if request.user.is_authenticated else None])
-        except Exception:
+        except Exception as e:
+            logger.warning("product_view_tracking_error", product_id=id, error=str(e))
             pass
+            
+        logger.info("product_viewed", product_id=id, user_id=request.user.id if request.user.is_authenticated else None)
         return Response({"success": True})
 
 
@@ -221,12 +236,14 @@ class ProductReviewsListCreateView(generics.ListCreateAPIView):
         if ProductReview.objects.filter(product=product, user=self.request.user).exists():
             from rest_framework.exceptions import ValidationError
             raise ValidationError({"detail": "You have already reviewed this product."})
+        logger.info("product_review_started", product_id=product.id, user_id=self.request.user.id)
         d = serializer.validated_data
         self.created_review = ProductReview.objects.create(
             product=product, user=self.request.user, order_id=d.get('order_id'),
             rating=d['rating'], title=d.get('title', ''), content=d.get('content', ''),
             images=d.get('images', []), verified_purchase=True
         )
+        logger.info("product_review_created", product_id=product.id, user_id=self.request.user.id, rating=d['rating'], review_id=self.created_review.id)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -342,14 +359,16 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return ProductQuestion.objects.none()
-        return ProductQuestion.objects.filter(product_id=self.kwargs['id'], status='published').order_by('-created_at')
+        return ProductQuestion.objects.filter(product_id=self.kwargs['id'], status='answered').order_by('-created_at')
 
     def perform_create(self, serializer):
         product = get_object_or_404(Product, id=self.kwargs['id'], status='active', approval_status='approved')
+        logger.info("product_qa_started", product_id=product.id, user_id=self.request.user.id)
         d = serializer.validated_data
         self.created_qa = ProductQuestion.objects.create(
-            product=product, user=self.request.user, question=d['question']
+            product=product, user=self.request.user, question=d['question'], status='pending'
         )
+        logger.info("product_qa_question_created", product_id=product.id, user_id=self.request.user.id, qa_id=self.created_qa.id)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -362,7 +381,7 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
         from .serializers import ProductQuestionSerializer
         from django.db.models import Q
         product = get_object_or_404(Product, id=self.kwargs['id'], status='active', approval_status='approved')
-        qa = ProductQuestion.objects.filter(product=product, status='published').select_related('user')
+        qa = ProductQuestion.objects.filter(product=product, status='answered').select_related('user')
 
         # Gap 11: searchQuestions
         search = request.query_params.get('search', '').strip()
@@ -388,8 +407,8 @@ class ProductQAListCreateView(generics.ListCreateAPIView):
                 )
 
         qa = qa.order_by('-created_at')
-        answered = ProductQuestion.objects.filter(product=product, status='published').exclude(answer__isnull=True).exclude(answer='').count()
-        total = ProductQuestion.objects.filter(product=product, status='published').count()
+        answered = ProductQuestion.objects.filter(product=product, status='answered').exclude(answer__isnull=True).exclude(answer='').count()
+        total = ProductQuestion.objects.filter(product=product, status='answered').count()
         return Response({
             "count": qa.count(),
             "results": ProductQuestionSerializer(qa, many=True).data,
@@ -408,7 +427,7 @@ class ProductQAAnswerView(views.APIView):
         responses={200: inline_serializer(name="ProductQAAnswerRes", fields={"id": serializers.UUIDField(), "answer": serializers.CharField(), "status": serializers.CharField()})}
     )
     def post(self, request, id, qa_id):
-        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
+        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id)
         answer_text = request.data.get('answer', '').strip()
         if not answer_text:
             return Response({'error': 'Answer text is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -427,8 +446,10 @@ class ProductQAAnswerView(views.APIView):
         qa.answer = answer_text
         qa.answered_by = request.user.id
         qa.answered_at = tz.now()
-        qa.status = 'published'
+        qa.status = 'answered'
         qa.save(update_fields=['answer', 'answered_by', 'answered_at', 'status', 'updated_at'])
+        
+        logger.info("product_qa_answer_created", product_id=product.id, qa_id=qa.id, vendor_user_id=request.user.id)
 
         from .serializers import ProductQuestionSerializer
         return Response(ProductQuestionSerializer(qa).data)
@@ -447,9 +468,10 @@ class ProductQAHelpfulView(views.APIView):
         })}
     )
     def post(self, request, id, qa_id):
-        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='published')
+        qa = get_object_or_404(ProductQuestion, id=qa_id, product_id=id, status='answered')
         qa.is_helpful_count = (qa.is_helpful_count or 0) + 1
         qa.save(update_fields=['is_helpful_count'])
+        logger.info("product_qa_marked_helpful", product_id=id, qa_id=qa.id, user_id=request.user.id)
         return Response({"success": True, "is_helpful_count": qa.is_helpful_count})
 
 
@@ -493,6 +515,7 @@ class ImageSearchView(views.APIView):
 
         # Read image bytes
         image_bytes = image_file.read()
+        logger.info("product_image_search_started", user_id=request.user.id)
 
         # Analyze image
         from ai_services.image_analysis_service import analyze_image
@@ -528,6 +551,8 @@ class ImageSearchView(views.APIView):
                 'status': p.get('status', 'active'),
                 'colors': p.get('colors', {}),
             })
+            
+        logger.info("product_image_search_completed", user_id=request.user.id, results_count=len(serialized))
 
         return Response({
             'description': description,
@@ -889,10 +914,12 @@ class ProductVideoUploadView(views.APIView):
         key = f"product-videos/{product.id}/{job.id}.{ext}"
         try:
             start_async_upload(job.id, temp_path, key, video_file.content_type, product.id)
+            logger.info("product_video_upload_started", product_id=product.id, job_id=job.id, user_id=request.user.id)
         except Exception as e:
             job.status = 'failed'
             job.error_message = str(e)
             job.save()
+            logger.error("product_video_upload_failed", product_id=product.id, job_id=job.id, error=str(e), user_id=request.user.id)
             return Response({'error': 'Failed to initiate video upload', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response({'job_id': job.id, 'status': 'processing'}, status=status.HTTP_202_ACCEPTED)
@@ -928,7 +955,9 @@ class ProductColorImageUploadView(views.APIView):
             
             try:
                 public_url = upload_file_to_r2(image_file, key, image_file.content_type)
+                logger.info("product_color_image_uploaded", product_id=product.id, color_name=color_name, user_id=request.user.id)
             except Exception as e:
+                logger.error("product_color_image_upload_failed", product_id=product.id, color_name=color_name, error=str(e), user_id=request.user.id)
                 return Response({'error': 'Failed to upload image to storage', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             if not isinstance(color_name, str):

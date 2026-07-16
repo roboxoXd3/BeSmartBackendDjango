@@ -16,6 +16,7 @@ class PaymentMethod(models.Model):
     cvv = models.DecimalField(max_digits=4, decimal_places=0, null=True, blank=True) # Usually not stored
     is_default = models.BooleanField(default=False)
     razorpay_card_token = models.TextField(null=True, blank=True) # Legacy or specific gateway
+    squad_token = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -88,10 +89,10 @@ class PaymentWebhook(models.Model):
     order_id = models.UUIDField(null=True, blank=True)
     
     # Raw data
-    webhook_data = models.JSONField()
+    webhook_data = models.JSONField(default=dict)
     
     # Processing status
-    status = models.CharField(max_length=255)
+    status = models.CharField(max_length=255, default='received')
     processed_at = models.DateTimeField(blank=True, null=True)
     
     # Timestamps
@@ -135,7 +136,7 @@ class Refund(models.Model):
     status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default='pending')
     
     # Admin details
-    initiated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    initiated_by = models.ForeignKey(User, on_delete=models.DO_NOTHING, null=True)
     admin_notes = models.TextField(blank=True, null=True)
     
     # Timestamps

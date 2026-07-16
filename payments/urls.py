@@ -13,4 +13,5 @@ urlpatterns = [
     path('webhook/', views.PaymentWebhookView.as_view(), name='squad-webhook'),
     path('initiate/', views.InitiatePaymentView.as_view(), name='initiate-payment'),
     path('verify/<str:ref>/', views.VerifyPaymentView.as_view(), name='verify-payment'),
+    path('charge-token/', views.ChargeTokenView.as_view(), name='charge-token'),
 ]

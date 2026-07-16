@@ -11,12 +11,12 @@ Implements:
 
 All queries hit the same Supabase PostgreSQL DB Django is connected to.
 """
-import logging
+from besmart_backend.utils.logger import get_logger
 import uuid as uuid_module
 
 from django.db import connection
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ def hybrid_search(query: str, limit: int = 20) -> list[dict]:
         return sorted_products[:limit]
 
     except Exception as e:
-        logger.error('Hybrid search failed: %s', e)
+        logger.error('hybrid_search_failed', error=str(e))
         return search_products(query, limit=limit)
 
 
@@ -106,7 +106,7 @@ def search_products(query: str, limit: int = 20) -> list[dict]:
             return _dictfetchall(c)
 
     except Exception as e:
-        logger.error('search_products error: %s', e)
+        logger.error('search_products_failed', error=str(e))
         return []
 
 
@@ -124,7 +124,7 @@ def semantic_search(query: str, limit: int = 10, threshold: float = 0.3) -> list
         if not api_key:
             return enhanced_keyword_search(query, limit=limit)
 
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=20.0)
         embedding_response = client.embeddings.create(
             model='text-embedding-3-small',
             input=query,
@@ -155,7 +155,7 @@ def semantic_search(query: str, limit: int = 10, threshold: float = 0.3) -> list
         return rows
 
     except Exception as e:
-        logger.warning('Semantic search failed, falling back to keyword: %s', e)
+        logger.warning('semantic_search_failed', error=str(e))
         return enhanced_keyword_search(query, limit=limit)
 
 
@@ -201,7 +201,7 @@ def enhanced_keyword_search(query: str, limit: int = 10) -> list[dict]:
         return results[:limit]
 
     except Exception as e:
-        logger.error('Enhanced keyword search failed: %s', e)
+        logger.error('enhanced_keyword_search_failed', error=str(e))
         return []
 
 
@@ -221,7 +221,7 @@ def get_trending_products(limit: int = 10) -> list[dict]:
             """, [limit])
             return _dictfetchall(c)
     except Exception as e:
-        logger.error('get_trending_products error: %s', e)
+        logger.error('get_trending_products_failed', error=str(e))
         return []
 
 
@@ -291,7 +291,7 @@ def enrich_products(products: list[dict]) -> list[dict]:
                     'group_name': row[1], 'spec_name': row[2], 'spec_value': row[3],
                 })
     except Exception as e:
-        logger.warning('enrich_products failed: %s', e)
+        logger.warning('enrich_products_failed', error=str(e))
 
     for p in products:
         pid = str(p['id'])
@@ -319,7 +319,7 @@ def get_relevant_faqs(query: str, limit: int = 5) -> list[dict]:
             """, [like_q, like_q, limit])
             return _dictfetchall(c)
     except Exception as e:
-        logger.warning('get_relevant_faqs error: %s', e)
+        logger.warning('get_relevant_faqs_failed', error=str(e))
         return []
 
 
@@ -335,7 +335,7 @@ def get_product_specs(product_id: str) -> list[dict]:
             """, [product_id])
             return _dictfetchall(c)
     except Exception as e:
-        logger.warning('get_product_specs error: %s', e)
+        logger.warning('get_product_specs_failed', error=str(e))
         return []
 
 

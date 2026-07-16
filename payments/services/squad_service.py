@@ -30,7 +30,8 @@ class SquadPaymentService:
         transaction_ref: str,
         currency: str = 'NGN',
         callback_url: Optional[str] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        is_recurring: bool = False
     ) -> Dict:
         """
         Initiate payment with Squad
@@ -58,17 +59,23 @@ class SquadPaymentService:
             'initiate_type': 'inline',
             'transaction_ref': transaction_ref,
             'callback_url': callback_url or settings.PAYMENT_CONFIG['CALLBACK_URL'],
+            'is_recurring': is_recurring
         }
-        
+            
+
         if metadata:
             payload['metadata'] = metadata
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
+            if not response.ok:
+                import logging
+                logging.getLogger(__name__).error(f"squad_api_error_response {response.status_code} {response.text}")
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Squad API Error: {str(e)}")
+            text = getattr(e.response, 'text', '') if hasattr(e, 'response') else ''
+            raise Exception(f"Squad API Error: {str(e)} - {text}")
     
     def verify_transaction(self, transaction_ref: str) -> Dict:
         """
@@ -83,32 +90,65 @@ class SquadPaymentService:
         url = f"{self.base_url}/transaction/verify/{transaction_ref}"
         
         try:
-            response = requests.get(url, headers=self._get_headers())
+            response = requests.get(url, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
             raise Exception(f"Squad Verification Error: {str(e)}")
     
-    def validate_webhook_signature(self, payload: Dict, signature: str) -> bool:
+    def validate_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """
         Validate webhook signature from Squad
         
         Args:
-            payload: Webhook payload
+            payload: Raw webhook payload (request.body)
             signature: Signature from x-squad-encrypted-body header
         
         Returns:
             Boolean indicating if signature is valid
         """
-        payload_string = json.dumps(payload, separators=(',', ':'))
         
         computed_signature = hmac.new(
             self.webhook_secret.encode('utf-8'),
-            payload_string.encode('utf-8'),
+            payload,
             hashlib.sha512
-        ).hexdigest()
+        ).hexdigest().upper()
         
-        return hmac.compare_digest(computed_signature, signature)
+        return hmac.compare_digest(computed_signature, signature.upper())
+
+    def charge_card_with_token(
+        self,
+        amount: Decimal,
+        token_id: str,
+        transaction_ref: str
+    ) -> Dict:
+        """
+        Charge a tokenized card
+        
+        Args:
+            amount: Payment amount in naira (will be converted to kobo)
+            token_id: Squad token ID
+            transaction_ref: Unique transaction reference
+            
+        Returns:
+            Dict containing transaction details
+        """
+        url = f"{self.base_url}/transaction/charge_card"
+        
+        amount_in_kobo = int(amount * 100)
+        
+        payload = {
+            'amount': amount_in_kobo,
+            'token_id': token_id,
+            'transaction_ref': transaction_ref
+        }
+        
+        try:
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Squad Token Charge Error: {str(e)}")
 
 
 class SquadTransferService:
@@ -144,7 +184,7 @@ class SquadTransferService:
         }
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             data = response.json()
             
@@ -206,7 +246,7 @@ class SquadTransferService:
         }
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -227,7 +267,7 @@ class SquadTransferService:
         payload = {'transaction_reference': transaction_ref}
         
         try:
-            response = requests.post(url, json=payload, headers=self._get_headers())
+            response = requests.post(url, json=payload, headers=self._get_headers(), timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:

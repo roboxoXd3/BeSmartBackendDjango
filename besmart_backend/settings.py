@@ -66,9 +66,13 @@ INSTALLED_APPS = [
     'content',
     'search',
     'ai_services',
+    
+    # Observability
+    'django_prometheus',
 ]
 
 MIDDLEWARE = [
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # CORS first
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -78,6 +82,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'besmart_backend.middleware.tracing_middleware.TracingMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'besmart_backend.urls'
@@ -228,7 +234,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'besmart_backend.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
@@ -291,6 +297,131 @@ if RAILWAY_PUBLIC_DOMAIN:
     CSRF_TRUSTED_ORIGINS.append(f"https://{RAILWAY_PUBLIC_DOMAIN}")
 CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
 
+# Ensure HTTPS in DRF pagination links when behind a proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Squad Payment Gateway
 SQUAD_SECRET_KEY = os.environ.get('SQUAD_PRIVATE_KEY', os.environ.get('SQUAD_SECRET_KEY', ''))
 SQUAD_BASE_URL = os.environ.get('SQUAD_BASE_URL', 'https://api-d.squadco.com')
+
+SQUAD_CONFIG = {
+    'SECRET_KEY': SQUAD_SECRET_KEY,
+    'PUBLIC_KEY': os.environ.get('SQUAD_PUBLIC_KEY', ''),
+    'BASE_URL': SQUAD_BASE_URL,
+    'WEBHOOK_SECRET': os.environ.get('SQUAD_WEBHOOK_HASH', ''),
+}
+
+PAYMENT_CONFIG = {
+    'CALLBACK_URL': os.environ.get('PAYMENT_CALLBACK_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000') + '/payment/callback'),
+}
+
+# ---------------------------------------------------------------------
+# OBSERVABILITY & LOGGING CONFIGURATION
+# ---------------------------------------------------------------------
+import structlog
+import logging.config
+
+LOKI_URL = os.getenv('LOKI_URL') # e.g., 'http://loki:3100/loki/api/v1/push'
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'local' if DEBUG else 'production')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'ignore_prometheus': {
+            '()': 'besmart_backend.logging_filters.PrometheusEndpointFilter',
+        },
+    },
+    'formatters': {
+        'json': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.JSONRenderer(),
+        },
+        'plain': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.dev.ConsoleRenderer(colors=True),
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json' if not DEBUG else 'plain',
+            'filters': ['ignore_prometheus'],
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'besmart_backend': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'users': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'products': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'orders': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'payments': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'loyalty': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'vendors': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'admin_api': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'support': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'categories': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'currency': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        # You can add custom loggers here if needed
+    },
+}
+
+import queue
+
+if LOKI_URL:
+    LOGGING['handlers']['loki'] = {
+        '()': 'logging_loki.LokiQueueHandler',
+        'queue': queue.Queue(-1),
+        'url': LOKI_URL,
+        'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
+        'version': '1',
+        'formatter': 'json',
+        'filters': ['ignore_prometheus'],
+    }
+    LOGGING['loggers']['django']['handlers'].append('loki')
+    LOGGING['loggers']['besmart_backend']['handlers'].append('loki')
+    
+    # Append Loki handler to all our local apps
+    for app in ['users', 'products', 'orders', 'payments', 'loyalty', 'vendors', 'admin_api', 'support', 'categories', 'currency']:
+        LOGGING['loggers'][app]['handlers'].append('loki')
+
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+# ---------------------------------------------------------------------
+# OPENTELEMETRY TRACING INITIALIZATION
+# ---------------------------------------------------------------------
+try:
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.instrumentation.django import DjangoInstrumentor
+    
+    # If the provider is a ProxyTracerProvider (default unconfigured), set a real one
+    if type(trace.get_tracer_provider()).__name__ == 'ProxyTracerProvider':
+        trace.set_tracer_provider(TracerProvider())
+        
+    DjangoInstrumentor().instrument()
+except ImportError:
+    pass

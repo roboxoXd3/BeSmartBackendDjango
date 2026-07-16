@@ -8,13 +8,15 @@ from .views import (
     VendorProductsView, VendorReviewsListCreateView,
     VendorReviewUpdateDeleteView, VendorFollowView,
     VendorFollowedListView, VendorFollowersView, VendorMyReviewView,
-    VendorKYCStatusView, VendorKYCUploadView,
+    VendorKYCStatusView, VendorKYCUploadView, VendorResubmitView,
     VendorAnalyticsSalesView, VendorAnalyticsMetricsView,
     VendorCustomerLocationsView, VendorOwnProductViewSet,
     VendorOrderViewSet, VendorEscrowViewSet, VendorTransactionViewSet,
     VendorPayoutSummaryView,
     VendorProductReviewViewSet, VendorProductQAViewSet,
-    VendorProductSizeChartAssignView, VendorSessionViewSet
+    VendorProductSizeChartAssignView, VendorSessionViewSet,
+    VendorAnalyticsTrackView, VendorAnalyticsFunnelView, VendorAnalyticsPerformanceView,
+    VendorAnalyticsViewsOverTimeView
 )
 
 router = DefaultRouter()
@@ -37,11 +39,16 @@ urlpatterns = [
     path('register/', VendorRegisterView.as_view(), name='vendor-register'),
     path('profile/', VendorProfileView.as_view(), name='vendor-profile'),
     path('kyc-status/', VendorKYCStatusView.as_view(), name='vendor-kyc-status'),
+    path('resubmit/', VendorResubmitView.as_view(), name='vendor-resubmit'),
     path('kyc/upload/', VendorKYCUploadView.as_view(), name='vendor-kyc-upload'),
     path('dashboard/stats/', VendorDashboardStatsView.as_view(), name='vendor-dashboard-stats'),
     path('dashboard/sales-trend/', VendorAnalyticsSalesView.as_view(), name='vendor-sales-trend'),
     path('analytics/sales/', VendorAnalyticsSalesView.as_view(), name='vendor-analytics-sales'),
     path('analytics/metrics/', VendorAnalyticsMetricsView.as_view(), name='vendor-analytics-metrics'),
+    path('analytics/track/', VendorAnalyticsTrackView.as_view(), name='vendor-analytics-track'),
+    path('analytics/funnel/', VendorAnalyticsFunnelView.as_view(), name='vendor-analytics-funnel'),
+    path('analytics/performance/', VendorAnalyticsPerformanceView.as_view(), name='vendor-analytics-performance'),
+    path('analytics/views-over-time/', VendorAnalyticsViewsOverTimeView.as_view(), name='vendor-analytics-views-over-time'),
     path('stats/customer-locations/', VendorCustomerLocationsView.as_view(), name='vendor-customer-locations'),
     path('payouts/summary/', VendorPayoutSummaryView.as_view(), name='vendor-payouts-summary'),
     path('payouts/', VendorPayoutListView.as_view(), name='vendor-payouts'),
