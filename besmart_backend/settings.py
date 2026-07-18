@@ -299,6 +299,8 @@ CSRF_TRUSTED_ORIGINS.append("https://*.railway.app")
 
 # Ensure HTTPS in DRF pagination links when behind a proxy
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
 
 # Squad Payment Gateway
 SQUAD_SECRET_KEY = os.environ.get('SQUAD_PRIVATE_KEY', os.environ.get('SQUAD_SECRET_KEY', ''))
@@ -312,7 +314,7 @@ SQUAD_CONFIG = {
 }
 
 PAYMENT_CONFIG = {
-    'CALLBACK_URL': os.environ.get('PAYMENT_CALLBACK_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000') + '/payment/callback'),
+    'CALLBACK_URL': os.environ.get('PAYMENT_CALLBACK_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000') + '/verify-payment'),
 }
 
 # ---------------------------------------------------------------------
