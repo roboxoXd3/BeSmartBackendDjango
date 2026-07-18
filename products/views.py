@@ -48,10 +48,12 @@ class ProductListView(generics.ListAPIView):
     # Filter fields
     filterset_fields = {
         'category_id': ['exact'],
+        'subcategory_id': ['exact'],
         'is_featured': ['exact'],
         'is_new_arrival': ['exact'],
         'is_on_sale': ['exact'],
         'price': ['gte', 'lte'],
+        'rating': ['gte'],
         'brand': ['exact', 'icontains'],
         'vendor_id': ['exact'],
     }
@@ -77,7 +79,7 @@ class ProductListView(generics.ListAPIView):
 
 class ProductDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
-    queryset = Product.objects.all()
+    queryset = Product.objects.filter(status='active', approval_status='approved')
     serializer_class = ProductDetailSerializer
     lookup_field = 'id'
 
