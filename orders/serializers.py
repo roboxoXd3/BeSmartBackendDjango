@@ -129,6 +129,7 @@ class CreateOrderSerializer(serializers.Serializer):
         choices=['cash_on_delivery', 'credit_card', 'debit_card', 'upi', 'net_banking'],
         default='cash_on_delivery'
     )
+    shipping_fee = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     loyalty_voucher_code = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     # Gap 24: Squad payment fields

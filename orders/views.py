@@ -259,7 +259,10 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
-        return Order.objects.filter(user=self.request.user).prefetch_related('items', 'items__product')
+        from django.db.models import Q
+        return Order.objects.filter(user=self.request.user).prefetch_related('items', 'items__product').exclude(
+            ~Q(shipping_method='cash_on_delivery') & ~Q(payment_status='paid')
+        )
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -275,12 +278,23 @@ class OrderListCreateView(generics.ListCreateAPIView):
         if direct_items:
             # Direct item list provided — build order from it
             order_products = []
+            
+            # Fetch products in bulk to avoid N+1 queries
+            product_ids = [item_data['product_id'] for item_data in direct_items]
+            products_qs = Product.objects.filter(id__in=product_ids, status='active', approval_status='approved')
+            product_map = {str(p.id): p for p in products_qs}
+            
             for item_data in direct_items:
-                product = get_object_or_404(Product, id=item_data['product_id'], status='active', approval_status='approved')
+                product_id_str = str(item_data['product_id'])
+                if product_id_str not in product_map:
+                    return Response({"error": f"Product {product_id_str} not found or inactive"}, status=status.HTTP_404_NOT_FOUND)
+                    
+                product = product_map[product_id_str]
+                price = product.sale_price if (product.discount_percentage and product.discount_percentage > 0 and product.sale_price) else product.price
                 order_products.append({
                     'product': product,
                     'quantity': item_data['quantity'],
-                    'price': product.price,
+                    'price': price,
                     'selected_size': item_data.get('selected_size', ''),
                     'selected_color': item_data.get('selected_color', ''),
                 })
@@ -295,12 +309,12 @@ class OrderListCreateView(generics.ListCreateAPIView):
             if not cart_items:
                 logger.warning("order_creation_failed", reason="empty_cart")
                 return Response({"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
-            subtotal = sum(item.quantity * item.product.price for item in cart_items)
+            subtotal = sum(item.quantity * (item.product.sale_price if (item.product.discount_percentage and item.product.discount_percentage > 0 and item.product.sale_price) else item.product.price) for item in cart_items)
             order_products = None  # Marker for cart-based
             
         logger.info("order_items_processed", items_count=len(order_products) if order_products else len(cart_items), subtotal=subtotal)
 
-        shipping_fee = 0
+        shipping_fee = data.get('shipping_fee', 0)
         discount_amount = 0
 
         used_voucher = None
@@ -352,9 +366,10 @@ class OrderListCreateView(generics.ListCreateAPIView):
         else:
             # Cart-based
             for item in cart_items:
+                price = item.product.sale_price if (item.product.discount_percentage and item.product.discount_percentage > 0 and item.product.sale_price) else item.product.price
                 OrderItem.objects.create(
                     order=order, product=item.product, quantity=item.quantity,
-                    price=item.product.price, selected_size=item.selected_size, selected_color=item.selected_color
+                    price=price, selected_size=item.selected_size, selected_color=item.selected_color
                 )
             cart.items.all().delete()
             
