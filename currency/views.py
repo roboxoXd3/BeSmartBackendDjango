@@ -41,6 +41,9 @@ def fetch_and_update_rates():
 
     Called in a background thread — must not raise into the caller.
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(user_id="system")
+    
     try:
         logger.info('currency_update_started', api_url=_API_URL)
         req = urllib.request.Request(_API_URL, headers={'User-Agent': 'BeSmart/1.0'})
@@ -55,6 +58,7 @@ def fetch_and_update_rates():
 
         rows = list(CurrencyRate.objects.all())
         updated_count = 0
+        updated_details = {}
 
         for row in rows:
             from_c = row.from_currency
@@ -73,18 +77,28 @@ def fetch_and_update_rates():
 
             # Derive: from->to = (1 / NGN->from) * NGN->to  =  NGN->to / NGN->from
             new_rate = Decimal(str(ngn_to_to)) / Decimal(str(ngn_to_from))
-            row.rate = new_rate.quantize(Decimal('0.000001'))
+            new_rate_quantized = new_rate.quantize(Decimal('0.000001'))
+            
+            if row.rate != new_rate_quantized:
+                updated_details[f"{from_c}->{to_c}"] = {
+                    "old_rate": float(row.rate) if row.rate else None,
+                    "new_rate": float(new_rate_quantized)
+                }
+            
+            row.rate = new_rate_quantized
             row.source = 'exchangerate-api'
             updated_count += 1
 
         if updated_count:
             CurrencyRate.objects.bulk_update(rows, ['rate', 'source', 'updated_at'])
-            logger.info('currency_update_success', updated_count=updated_count)
+            logger.info('currency_update_success', updated_count=updated_count, updated_details=updated_details)
         else:
             logger.warning('currency_update_no_updates')
 
     except Exception:
         logger.exception('currency_update_failed')
+    finally:
+        structlog.contextvars.clear_contextvars()
 
 
 _last_db_check = None

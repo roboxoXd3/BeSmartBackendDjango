@@ -51,6 +51,8 @@ def recognize_intent(message: str) -> dict:
     Recognize intent using OpenAI, with keyword fallback.
     Returns: {'intent': str, 'confidence': float, 'entities': list}
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(query=message)
     try:
         return _recognize_with_ai(message)
     except Exception as e:

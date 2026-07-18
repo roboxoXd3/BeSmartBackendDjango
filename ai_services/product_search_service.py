@@ -28,6 +28,8 @@ def hybrid_search(query: str, limit: int = 20) -> list[dict]:
     Combine keyword + semantic search, score and rank.
     Mirrors mobile's ProductSearchService.hybridSearch().
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(query=query, limit=limit)
     try:
         semantic_results = semantic_search(query, limit=limit, threshold=0.3)
         keyword_results = search_products(query, limit=limit)
@@ -71,6 +73,8 @@ def search_products(query: str, limit: int = 20) -> list[dict]:
     PostgreSQL full-text search on search_vector with ILIKE fallback.
     Mirrors mobile's searchProducts().
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(query=query, limit=limit)
     try:
         with connection.cursor() as c:
             # Try full-text search first
@@ -115,6 +119,8 @@ def semantic_search(query: str, limit: int = 10, threshold: float = 0.3) -> list
     Vector similarity search using the match_products RPC function in the DB.
     Mirrors mobile's semanticSearch().
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(query=query, limit=limit, threshold=threshold)
     try:
         # Generate embedding via OpenAI
         from openai import OpenAI
@@ -164,6 +170,8 @@ def enhanced_keyword_search(query: str, limit: int = 10) -> list[dict]:
     Multi-field ILIKE search with synonym expansion.
     Mirrors mobile's enhancedKeywordSearch().
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(query=query, limit=limit)
     try:
         expanded = _expand_search_query(query)
         words = list(set(
@@ -230,6 +238,8 @@ def search_by_image_description(description: str, limit: int = 10) -> list[dict]
     Given a text description from image analysis, search products.
     Mirrors mobile's searchByImage() flow (after image analysis).
     """
+    import structlog
+    structlog.contextvars.bind_contextvars(image_description=description, limit=limit)
     if not description or description.lower().strip() == 'product search':
         return enhanced_keyword_search('product', limit=limit)
 
