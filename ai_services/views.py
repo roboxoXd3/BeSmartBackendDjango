@@ -35,22 +35,22 @@ def chat(request):
 
     conversation_context = request.data.get('conversation_context', [])
     
-    logger.info("ai_chat_started", user_id=request.user.id)
+    logger.info("ai_chat_started")
 
     try:
         # Step 1: Classify intent
         intent = intent_service.recognize_intent(user_message)
-        logger.info('ai_chat_intent_recognized', intent=intent.get('intent'), user_id=request.user.id)
+        logger.info('ai_chat_intent_recognized', intent=intent.get('intent'))
 
         # Step 2: Search products if needed
         products = []
         if intent.get('intent') in ('product_search', 'product_info', 'recommendation', 'comparison'):
             entities = intent.get('entities', [])
             query = ' '.join(entities) if entities else user_message
-            logger.info('ai_search_query_parsed', user_id=request.user.id, query=query)
+            logger.info('ai_search_query_parsed', query=query)
             raw_products = product_search_service.hybrid_search(query, limit=20)
             products = product_search_service.enrich_products(raw_products)
-            logger.info('ai_search_completed', user_id=request.user.id, results_count=len(products))
+            logger.info('ai_search_completed', results_count=len(products))
 
         # Step 3: Fetch relevant FAQs
         faqs = product_search_service.get_relevant_faqs(user_message, limit=3)
@@ -67,7 +67,7 @@ def chat(request):
         # Serialize products to JSON-safe dicts
         serialized_products = [_serialize_product(p) for p in products[:8]]
 
-        logger.info('ai_chat_response_generated', user_id=request.user.id, intent=intent.get('intent'), product_count=len(serialized_products))
+        logger.info('ai_chat_response_generated', intent=intent.get('intent'), product_count=len(serialized_products))
         return Response({
             'text': result['text'],
             'products': serialized_products,
@@ -76,7 +76,7 @@ def chat(request):
         })
 
     except Exception as e:
-        logger.error('ai_chat_error', error=str(e), user_id=request.user.id, exc_info=True)
+        logger.error('ai_chat_error', error=str(e), exc_info=True)
         return Response(
             {'error': 'Failed to process message. Please try again.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -100,7 +100,7 @@ def analyze_image(request):
     if not image_file:
         return Response({'error': 'image file is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-    logger.info("ai_image_analysis_started", user_id=request.user.id)
+    logger.info("ai_image_analysis_started")
 
     try:
         image_bytes = image_file.read()
@@ -108,14 +108,14 @@ def analyze_image(request):
 
         # Step 1: Analyze image with OpenAI Vision
         description = image_analysis_service.analyze_image(image_bytes, content_type)
-        logger.info('ai_image_analyzed', user_id=request.user.id, description=description)
+        logger.info('ai_image_analyzed', description=description)
 
         # Step 2: Search products based on description
-        logger.info('ai_image_search_started', user_id=request.user.id)
+        logger.info('ai_image_search_started')
         raw_products = product_search_service.search_by_image_description(description, limit=20)
         products = product_search_service.enrich_products(raw_products)
         serialized_products = [_serialize_product(p) for p in products[:8]]
-        logger.info('ai_image_search_completed', user_id=request.user.id, results_count=len(products))
+        logger.info('ai_image_search_completed', results_count=len(products))
 
         return Response({
             'description': description,
@@ -123,7 +123,7 @@ def analyze_image(request):
         })
 
     except Exception as e:
-        logger.error('ai_image_analysis_error', error=str(e), user_id=request.user.id, exc_info=True)
+        logger.error('ai_image_analysis_error', error=str(e), exc_info=True)
         return Response(
             {'error': 'Failed to analyze image. Please try again.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,

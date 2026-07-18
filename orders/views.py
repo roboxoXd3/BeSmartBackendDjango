@@ -263,7 +263,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
-        logger.info("order_validation_started", user_id=request.user.id)
+        logger.info("order_validation_started")
         serializer = CreateOrderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -285,7 +285,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
                     'selected_color': item_data.get('selected_color', ''),
                 })
             if not order_products:
-                logger.warning("order_creation_failed", user_id=request.user.id, reason="no_valid_items")
+                logger.warning("order_creation_failed", reason="no_valid_items")
                 return Response({"error": "No valid items provided"}, status=status.HTTP_400_BAD_REQUEST)
             subtotal = sum(p['quantity'] * p['price'] for p in order_products)
         else:
@@ -293,12 +293,12 @@ class OrderListCreateView(generics.ListCreateAPIView):
             cart, _ = Cart.objects.get_or_create(user=request.user)
             cart_items = list(cart.items.select_related('product').all())
             if not cart_items:
-                logger.warning("order_creation_failed", user_id=request.user.id, reason="empty_cart")
+                logger.warning("order_creation_failed", reason="empty_cart")
                 return Response({"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
             subtotal = sum(item.quantity * item.product.price for item in cart_items)
             order_products = None  # Marker for cart-based
             
-        logger.info("order_items_processed", user_id=request.user.id, items_count=len(order_products) if order_products else len(cart_items), subtotal=subtotal)
+        logger.info("order_items_processed", items_count=len(order_products) if order_products else len(cart_items), subtotal=subtotal)
 
         shipping_fee = 0
         discount_amount = 0
@@ -317,7 +317,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
                 else:
                     discount_amount = float(v.discount_value)
                 used_voucher = v
-                logger.info("loyalty_voucher_applied", user_id=request.user.id, voucher_code=v.voucher_code, discount_amount=discount_amount)
+                logger.info("loyalty_voucher_applied", voucher_code=v.voucher_code, discount_amount=discount_amount)
 
         total = subtotal - discount_amount + shipping_fee
 
@@ -340,7 +340,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
             escrow_status=escrow_status_val,
             status=order_status,
         )
-        logger.info("order_record_created", user_id=request.user.id, order_id=order.id, status=order_status)
+        logger.info("order_record_created", order_id=order.id, status=order_status)
 
         if order_products is not None:
             # Direct items
@@ -358,7 +358,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
                 )
             cart.items.all().delete()
             
-        logger.info("order_items_created", user_id=request.user.id, order_id=order.id)
+        logger.info("order_items_created", order_id=order.id)
 
         if used_voucher:
             used_voucher.status = 'used'
@@ -366,7 +366,7 @@ class OrderListCreateView(generics.ListCreateAPIView):
             used_voucher.order = order
             used_voucher.save(update_fields=['status', 'used_at', 'order_id'])
             
-        logger.info("order_created", user_id=request.user.id, order_id=order.id, subtotal=subtotal, total=total)
+        logger.info("order_created", order_id=order.id, subtotal=subtotal, total=total)
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
@@ -394,7 +394,7 @@ class OrderCancelView(views.APIView):
         order.status = 'cancelled'
         order.save(update_fields=['status', 'updated_at'])
         
-        logger.info("order_cancelled", user_id=request.user.id, order_id=order.id)
+        logger.info("order_cancelled", order_id=order.id)
         
         return Response({
             "success": True,
@@ -418,7 +418,7 @@ class OrderPaymentStatusView(views.APIView):
         responses={200: inline_serializer("OrderPaymentStatusRes", {"success": serializers.BooleanField(), "order": OrderSerializer()})},
     )
     def patch(self, request, id):
-        logger.info("payment_status_update_started", user_id=request.user.id, order_id=id)
+        logger.info("payment_status_update_started", order_id=id)
         order = get_object_or_404(Order, id=id, user=request.user)
         payment_status_val = request.data.get('payment_status')
         squad_gateway_ref = request.data.get('squad_gateway_ref')
@@ -441,7 +441,7 @@ class OrderPaymentStatusView(views.APIView):
 
         order.save(update_fields=update_fields)
         
-        logger.info("order_payment_status_updated", user_id=request.user.id, order_id=order.id, payment_status=order.payment_status)
+        logger.info("order_payment_status_updated", order_id=order.id, payment_status=order.payment_status)
         
         return Response({
             'success': True,
@@ -462,7 +462,7 @@ class OrderStatusUpdateView(views.APIView):
     )
     @transaction.atomic
     def patch(self, request, id):
-        logger.info("order_status_update_started", user_id=request.user.id, order_id=id)
+        logger.info("order_status_update_started", order_id=id)
         order = get_object_or_404(Order, id=id, user=request.user)
         new_status = request.data.get('status', '').strip()
         valid_statuses = dict(Order.STATUS_CHOICES).keys()
@@ -480,7 +480,7 @@ class OrderStatusUpdateView(views.APIView):
         if new_status == 'delivered' and previous_status != 'delivered':
             points_awarded = self._award_loyalty_points(order)
 
-        logger.info("order_status_updated", user_id=request.user.id, order_id=order.id, previous_status=previous_status, new_status=new_status, points_awarded=points_awarded)
+        logger.info("order_status_updated", order_id=order.id, previous_status=previous_status, new_status=new_status, points_awarded=points_awarded)
 
         resp = {
             'success': True,

@@ -82,7 +82,7 @@ class InitiatePaymentView(views.APIView):
 
     @extend_schema(summary="Initiate Squad Payment", tags=["Payments"], request=InitiatePaymentSerializer, responses={200: None})
     def post(self, request):
-        logger.info("payment_initiation_started", user_id=request.user.id)
+        logger.info("payment_initiation_started")
         serializer = InitiatePaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -96,7 +96,7 @@ class InitiatePaymentView(views.APIView):
         amount = float(order.total)
         email = serializer.validated_data.get('email') or request.user.email
         
-        logger.info("payment_order_validated", user_id=request.user.id, order_id=order.id, amount=amount, email=email)
+        logger.info("payment_order_validated", order_id=order.id, amount=amount, email=email)
 
         # Generate a unique transaction reference
         transaction_ref = f"BESMART-{uuid.uuid4().hex[:16].upper()}"
@@ -106,7 +106,7 @@ class InitiatePaymentView(views.APIView):
         squad_service = SquadPaymentService()
         
         try:
-            logger.info("payment_gateway_request_started", user_id=request.user.id, transaction_ref=transaction_ref)
+            logger.info("payment_gateway_request_started", transaction_ref=transaction_ref)
             # TODO: We originally enforced is_recurring=True so the token is saved for future charges.
             # Since the current Squad merchant account does not support it and returns 400 Bad Request,
             # it has been disabled. Once the account is authorized for recurring billing, you can
@@ -124,14 +124,14 @@ class InitiatePaymentView(views.APIView):
                 checkout_url = squad_response['data']['checkout_url']
                 transaction_ref = squad_response['data'].get('transaction_ref', transaction_ref)
             else:
-                logger.error("payment_initiation_failed", user_id=request.user.id, order_id=order.id, reason=squad_response.get('message', 'gateway error'))
+                logger.error("payment_initiation_failed", order_id=order.id, reason=squad_response.get('message', 'gateway error'))
                 return Response({
                     'status': 'error',
                     'message': squad_response.get('message', 'Payment gateway error'),
                 }, status=status.HTTP_502_BAD_GATEWAY)
 
         except Exception as e:
-            logger.error("payment_initiation_error", user_id=request.user.id, order_id=order.id, error=str(e))
+            logger.error("payment_initiation_error", order_id=order.id, error=str(e))
             return Response({
                 'status': 'error',
                 'message': f'Could not reach payment gateway: {str(e)}',
@@ -142,7 +142,7 @@ class InitiatePaymentView(views.APIView):
         order.squad_transaction_ref = transaction_ref
         order.save(update_fields=['squad_transaction_ref'])
         
-        logger.info("payment_initiated", user_id=request.user.id, order_id=order.id, amount=amount, currency=currency, transaction_ref=transaction_ref)
+        logger.info("payment_initiated", order_id=order.id, amount=amount, currency=currency, transaction_ref=transaction_ref)
 
         return Response({
             "status": "success",
@@ -195,7 +195,7 @@ class VerifyPaymentView(views.APIView):
                     if gateway_ref:
                         order.squad_gateway_ref = gateway_ref
                     order.save()
-                    logger.info("payment_verified", user_id=request.user.id, order_id=order.id, transaction_ref=transaction_ref)
+                    logger.info("payment_verified", order_id=order.id, transaction_ref=transaction_ref)
                 return Response({
                     "status": "success",
                     "message": "Payment verified and order confirmed",

@@ -278,9 +278,9 @@ class VendorRegisterView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        logger.info("vendor_registration_started", user_id=self.request.user.id)
+        logger.info("vendor_registration_started")
         vendor = serializer.save(user=self.request.user)
-        logger.info("vendor_registered", vendor_id=vendor.id, user_id=self.request.user.id)
+        logger.info("vendor_registered", vendor_id=vendor.id)
 
 class VendorProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -357,7 +357,7 @@ class VendorKYCUploadView(views.APIView):
         )}
     )
     def post(self, request):
-        logger.info("vendor_kyc_upload_started", user_id=request.user.id)
+        logger.info("vendor_kyc_upload_started")
         vendor = get_object_or_404(Vendor, user=request.user)
         file_obj = request.FILES.get('document')
         document_type = request.data.get('document_type', '').strip()
@@ -646,7 +646,7 @@ class VendorPayoutListView(generics.ListCreateAPIView):
         return VendorPayout.objects.filter(vendor__user=self.request.user).order_by('-requested_at')
 
     def perform_create(self, serializer):
-        logger.info("vendor_payout_started", user_id=self.request.user.id)
+        logger.info("vendor_payout_started")
         vendor = get_object_or_404(Vendor, user=self.request.user)
         
         # 1. Check Balance
@@ -820,7 +820,7 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
         return ProductDetailSerializer
 
     def perform_create(self, serializer):
-        logger.info("vendor_product_creation_started", user_id=self.request.user.id)
+        logger.info("vendor_product_creation_started")
         vendor = get_object_or_404(Vendor, user=self.request.user)
         product = serializer.save(vendor_id=vendor.id, approval_status='pending')
         logger.info("product_created", vendor_id=vendor.id, product_id=product.id)
