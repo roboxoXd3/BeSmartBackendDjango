@@ -25,6 +25,24 @@ class TracingMiddleware(MiddlewareMixin):
             trace_id = format(ctx.trace_id, "032x")
             span_id = format(ctx.span_id, "016x")
             
+        # Extract user_id from JWT if present, without verification (lazy logging approach)
+        user_id = "anonymous"
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth_header.lower().startswith('bearer '):
+            token = auth_header[7:].strip()
+            try:
+                import json
+                import base64
+                parts = token.split('.')
+                if len(parts) == 3:
+                    payload_b64 = parts[1]
+                    payload_b64 += '=' * (-len(payload_b64) % 4)
+                    payload = json.loads(base64.b64decode(payload_b64).decode('utf-8'))
+                    if 'sub' in payload:
+                        user_id = payload['sub']
+            except Exception:
+                pass
+            
         # Bind core identifiers
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
@@ -32,6 +50,7 @@ class TracingMiddleware(MiddlewareMixin):
             span_id=span_id,
             path=request.path,
             method=request.method,
+            user_id=user_id,
         )
 
     def process_response(self, request, response):
