@@ -9,6 +9,9 @@ from categories.models import Category, Subcategory
 from loyalty.models import (
     LoyaltyPoints, LoyaltyTransaction, LoyaltyBadge, LoyaltyReward, LoyaltyEarningRule
 )
+from products.models import Product
+from vendors.models import VendorSizeChartTemplate
+from support.models import ContactBranch
 
 class LoyaltyBadgeAdminSerializer(serializers.ModelSerializer):
     class Meta:
@@ -318,3 +321,37 @@ class LoyaltyTransactionAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoyaltyTransaction
         fields = '__all__'
+
+
+class AdminProductDetailSerializer(serializers.ModelSerializer):
+    """Admin can set vendor_id and approval_status (unlike vendor ProductDetailSerializer)."""
+    class Meta:
+        model = Product
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at', 'added_date']
+
+
+class SizeChartAdminSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.SerializerMethodField()
+    vendor_email = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VendorSizeChartTemplate
+        fields = '__all__'
+
+    def get_vendor_name(self, obj):
+        return getattr(obj.vendor, 'business_name', None) if obj.vendor_id else None
+
+    def get_vendor_email(self, obj):
+        return getattr(obj.vendor, 'business_email', None) if obj.vendor_id else None
+
+    def get_category_name(self, obj):
+        return obj.category.name if getattr(obj, 'category_id', None) and obj.category else None
+
+
+class ContactBranchAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactBranch
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']

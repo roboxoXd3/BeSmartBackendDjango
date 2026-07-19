@@ -686,7 +686,7 @@ class VendorPayoutListView(generics.ListCreateAPIView):
         bank_account = serializer.validated_data.get('bank_account')
         if not bank_account:
             # Default to primary
-            bank_account = vendor.bank_accounts.filter(is_primary=True).first()
+            bank_account = vendor.bank_accounts.filter(is_default=True).first()
             if not bank_account:
                 from rest_framework.exceptions import ValidationError
                 raise ValidationError("No bank account specified and no primary account found.")

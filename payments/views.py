@@ -229,8 +229,9 @@ class PaymentWebhookView(views.APIView):
             return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 
         event = request.data.get('Event', '')
+        body = request.data.get('Body', {}) or {}
+
         if event == 'charge_successful':
-            body = request.data.get('Body', {})
             transaction_ref = body.get('transaction_ref')
             token_id = body.get('payment_information', {}).get('token_id')
 
@@ -260,6 +261,71 @@ class PaymentWebhookView(views.APIView):
                         )
                 except Order.DoesNotExist:
                     pass
+
+        elif event in ('transfer_successful', 'transfer_failed'):
+            from django.utils import timezone
+            from django.db import transaction as db_transaction
+            from django.db.models import F
+            from vendors.models import VendorPayout, PayoutTransaction, Vendor
+
+            transaction_ref = (
+                body.get('transaction_reference')
+                or body.get('transaction_ref')
+                or request.data.get('transaction_reference')
+            )
+            logger.info("transfer_webhook_received", event=event, transaction_ref=transaction_ref)
+            PaymentWebhook.objects.create(transaction_ref=transaction_ref, webhook_data=request.data)
+
+            if transaction_ref:
+                with db_transaction.atomic():
+                    payout = (
+                        VendorPayout.objects.select_for_update()
+                        .filter(squad_transaction_ref=transaction_ref)
+                        .select_related('vendor')
+                        .first()
+                    )
+                    if not payout:
+                        txn = (
+                            PayoutTransaction.objects.filter(reference_id=transaction_ref)
+                            .select_related('payout', 'payout__vendor')
+                            .first()
+                        )
+                        if txn and txn.payout_id:
+                            payout = (
+                                VendorPayout.objects.select_for_update()
+                                .filter(pk=txn.payout_id)
+                                .select_related('vendor')
+                                .first()
+                            )
+
+                    if not payout:
+                        pass
+                    elif event == 'transfer_successful':
+                        # Only complete from processing; ignore retries / late events
+                        if payout.status == 'processing':
+                            payout.status = 'completed'
+                            payout.completed_at = timezone.now()
+                            payout.failure_reason = None
+                            payout.save(update_fields=['status', 'completed_at', 'failure_reason'])
+                            Vendor.objects.filter(id=payout.vendor_id).update(
+                                total_paid_out=F('total_paid_out') + payout.amount
+                            )
+                            PayoutTransaction.objects.create(
+                                payout=payout,
+                                amount=-payout.amount,
+                                transaction_type='withdrawal',
+                                reference_id=transaction_ref,
+                                description=f'Payout completed - {payout.vendor.business_name}',
+                            )
+                    else:
+                        # Failure: only from processing. Do not bump pending_payouts —
+                        # process_transfer never decremented it on initiate.
+                        if payout.status == 'processing':
+                            reason = body.get('reason') or body.get('message') or 'Transfer failed'
+                            payout.status = 'failed'
+                            payout.failure_reason = reason
+                            payout.completed_at = timezone.now()
+                            payout.save(update_fields=['status', 'failure_reason', 'completed_at'])
 
         return Response({"status": "received"}, status=status.HTTP_200_OK)
 

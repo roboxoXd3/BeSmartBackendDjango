@@ -12,7 +12,8 @@ from .views import (
     VendorBankAccountAdminViewSet, HeroSectionAdminViewSet,
     ContactInfoAdminViewSet, PromotionalBannerAdminViewSet, SupportInfoAdminViewSet,
     AdminCategoryImageUploadView, LoyaltyTransactionAdminViewSet,
-    LoyaltyBadgeAdminViewSet, LoyaltyRewardAdminViewSet, LoyaltyEarningRuleAdminViewSet
+    LoyaltyBadgeAdminViewSet, LoyaltyRewardAdminViewSet, LoyaltyEarningRuleAdminViewSet,
+    SizeChartAdminViewSet, ContactBranchAdminViewSet,
 )
 
 router = DefaultRouter()
@@ -39,6 +40,8 @@ router.register(r'promotional-banners', PromotionalBannerAdminViewSet, basename=
 router.register(r'support-info', SupportInfoAdminViewSet, basename='admin-support-info')
 router.register(r'categories', CategoryAdminViewSet, basename='admin-categories')
 router.register(r'subcategories', SubcategoryAdminViewSet, basename='admin-subcategories')
+router.register(r'size-charts', SizeChartAdminViewSet, basename='admin-size-charts')
+router.register(r'contact-branches', ContactBranchAdminViewSet, basename='admin-contact-branches')
 urlpatterns = [
     path('logs/', AdminActionLogListView.as_view(), name='admin-logs'),
     path('dashboard/stats/', SystemStatsView.as_view(), name='admin-system-stats'),

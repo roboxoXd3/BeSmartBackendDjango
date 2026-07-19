@@ -15,7 +15,8 @@ from .serializers import (
     SupportTicketAdminSerializer, SupportMessageAdminSerializer,
     VendorBankAccountAdminSerializer, LoyaltyPointsAdminSerializer,
     LoyaltyTransactionAdminSerializer, LoyaltyBadgeAdminSerializer, 
-    LoyaltyRewardAdminSerializer, LoyaltyEarningRuleAdminSerializer
+    LoyaltyRewardAdminSerializer, LoyaltyEarningRuleAdminSerializer,
+    AdminProductDetailSerializer, SizeChartAdminSerializer, ContactBranchAdminSerializer
 )
 from content.models import PromotionalBanner, HeroSection, ContactInfo, SupportInfo
 from content.serializers import (
@@ -30,11 +31,15 @@ from loyalty.models import (
 )
 from django.db import transaction
 from users.models import User
-from vendors.models import Vendor
+from vendors.models import (
+    Vendor, VendorPayout, EscrowTransaction, VendorFollow, PayoutTransaction,
+    VendorSizeChartTemplate,
+)
 from orders.models import Order
 from products.models import Product
-from vendors.models import VendorPayout, EscrowTransaction, VendorFollow, PayoutTransaction
-from products.serializers import ProductListSerializer, ProductDetailSerializer
+from products.serializers import ProductListSerializer
+from support.models import ContactBranch
+from django.utils import timezone as dj_timezone
 from orders.serializers import OrderSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
@@ -427,7 +432,7 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return ProductListSerializer
-        return ProductDetailSerializer
+        return AdminProductDetailSerializer
 
     @extend_schema(summary="Get pending product approvals")
     @action(detail=False, methods=['get'], url_path='pending-approvals')
@@ -451,7 +456,8 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         product = self.get_object()
         product.approval_status = 'approved'
-        product.save(update_fields=['approval_status'])
+        product.rejection_reason = None
+        product.save(update_fields=['approval_status', 'rejection_reason'])
         logger.info("admin_approved_product", admin_id=request.user.id, product_id=product.id)
         return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
@@ -473,10 +479,12 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
     def reject(self, request, pk=None):
         product = self.get_object()
         product.approval_status = 'rejected'
-        if 'notes' in request.data:
-            # Note: We might need a notes field on the product model or admin log
-            pass
-        product.save(update_fields=['approval_status'])
+        notes = request.data.get('notes') or request.data.get('rejection_reason')
+        update_fields = ['approval_status']
+        if notes:
+            product.rejection_reason = notes
+            update_fields.append('rejection_reason')
+        product.save(update_fields=update_fields)
         logger.info("admin_rejected_product", admin_id=request.user.id, product_id=product.id)
         return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
@@ -666,7 +674,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
         if payout.status in ['completed', 'processing']:
             return Response({'error': f'Payout is already {payout.status}'}, status=status.HTTP_400_BAD_REQUEST)
             
-        bank_account = payout.vendor.bank_accounts.filter(is_primary=True).first()
+        bank_account = payout.vendor.bank_accounts.filter(is_default=True).first()
         if not bank_account:
             bank_account = payout.vendor.bank_accounts.first()
             
@@ -678,20 +686,32 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
         
         transfer_svc = SquadTransferService()
         ref = f"PAY-{str(payout.id)[:8]}-{uuid.uuid4().hex[:8]}"
-        
-        result = transfer_svc.initiate_transfer(
-            transaction_ref=ref,
-            amount=payout.amount,
-            bank_code=bank_account.bank_code,
-            account_number=bank_account.account_number,
-            account_name=bank_account.account_name,
-            remark=f"Payout for {payout.vendor.business_name}"
-        )
-        
-        if result.get('success'):
+
+        try:
+            result = transfer_svc.initiate_transfer(
+                transaction_ref=ref,
+                amount=payout.amount,
+                bank_code=bank_account.bank_code,
+                account_number=bank_account.account_number,
+                account_name=bank_account.account_name,
+                remark=f"Payout for {payout.vendor.business_name}"
+            )
+        except Exception as exc:
+            logger.error(
+                "admin_squad_transfer_exception",
+                admin_id=request.user.id,
+                payout_id=payout.id,
+                error=str(exc),
+            )
+            return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        # Squad responses vary: {success: true} and/or {status: 200}
+        transfer_ok = bool(result.get('success')) or result.get('status') == 200
+        if transfer_ok:
             from django.utils import timezone
             payout.status = 'processing'
             payout.processed_at = timezone.now()
+            payout.squad_transaction_ref = ref
             if 'admin_notes' in request.data:
                 payout.admin_notes = request.data['admin_notes']
             payout.save()
@@ -699,13 +719,10 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
             from vendors.models import PayoutTransaction
             PayoutTransaction.objects.create(
                 payout=payout,
-                vendor=payout.vendor,
                 amount=payout.amount,
                 transaction_type='payout',
                 reference_id=ref,
-                gateway='squad',
-                status='pending',
-                description='Squad transfer initiated'
+                description='Squad transfer initiated',
             )
             
             logger.info("admin_initiated_squad_transfer", admin_id=request.user.id, payout_id=payout.id, ref=ref)
@@ -730,7 +747,7 @@ class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = EscrowAdminSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = EscrowAdminFilter
-    search_fields = ['reference_id', 'vendor__business_name']
+    search_fields = ['vendor__business_name']
     ordering_fields = ['created_at', 'amount']
 
     @extend_schema(
@@ -742,15 +759,15 @@ class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
         from django.utils import timezone
         from django.db import transaction
         with transaction.atomic():
-            escrow = self.get_object()
+            escrow = EscrowTransaction.objects.select_for_update().get(pk=pk)
             if escrow.status != 'held':
                 return Response({'error': f'Escrow is already {escrow.status}'}, status=status.HTTP_400_BAD_REQUEST)
             escrow.status = 'released'
             escrow.release_date = timezone.now()
-            escrow.save()
-            vendor = escrow.vendor
+            escrow.save(update_fields=['status', 'release_date'])
+            vendor = Vendor.objects.select_for_update().get(pk=escrow.vendor_id)
             vendor.available_balance += escrow.amount
-            vendor.save()
+            vendor.save(update_fields=['available_balance'])
         return Response({'status': 'escrow released'})
 
     @extend_schema(
@@ -759,11 +776,21 @@ class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=True, methods=['post'])
     def hold(self, request, pk=None):
-        escrow = self.get_object()
-        if escrow.status == 'held':
-            return Response({'error': 'Escrow is already held'}, status=status.HTTP_400_BAD_REQUEST)
-        escrow.status = 'held'
-        escrow.save()
+        from django.db import transaction
+        with transaction.atomic():
+            escrow = EscrowTransaction.objects.select_for_update().get(pk=pk)
+            if escrow.status == 'held':
+                return Response({'error': 'Escrow is already held'}, status=status.HTTP_400_BAD_REQUEST)
+            was_released = escrow.status == 'released'
+            escrow.status = 'held'
+            escrow.release_date = None
+            escrow.save(update_fields=['status', 'release_date'])
+            if was_released:
+                # Reverse the balance credited on release
+                vendor = Vendor.objects.select_for_update().get(pk=escrow.vendor_id)
+                new_balance = vendor.available_balance - escrow.amount
+                vendor.available_balance = new_balance if new_balance > 0 else 0
+                vendor.save(update_fields=['available_balance'])
         return Response({'status': 'escrow held'})
 
     @extend_schema(
@@ -1402,3 +1429,60 @@ class AdminCategoryImageUploadView(views.APIView):
             logger.info("admin_deleted_category_image", admin_id=request.user.id, category_id=category.id)
             return Response({'status': 'deleted'})
         return Response({'error': 'Image not found in category'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class SizeChartAdminViewSet(viewsets.ReadOnlyModelViewSet):
+    """Admin list/approve/reject for vendor size chart templates."""
+    permission_classes = [IsAdminUser]
+    serializer_class = SizeChartAdminSerializer
+    queryset = VendorSizeChartTemplate.objects.select_related(
+        'vendor', 'category'
+    ).all().order_by('-created_at')
+
+    @extend_schema(summary="Approve a size chart template")
+    @action(detail=True, methods=['post', 'patch'], url_path='approve')
+    def approve(self, request, pk=None):
+        chart = self.get_object()
+        chart.approval_status = 'approved'
+        chart.approved_by = request.user
+        chart.approved_at = dj_timezone.now()
+        chart.rejection_reason = None
+        chart.save(update_fields=[
+            'approval_status', 'approved_by', 'approved_at', 'rejection_reason', 'updated_at'
+        ])
+        return Response({
+            'status': 'approved',
+            'approval_status': chart.approval_status,
+            'size_chart': SizeChartAdminSerializer(chart).data,
+        })
+
+    @extend_schema(
+        summary="Reject a size chart template",
+        request=inline_serializer(
+            name="SizeChartRejectRequest",
+            fields={"notes": serializers.CharField(required=False, allow_blank=True)}
+        ),
+    )
+    @action(detail=True, methods=['post', 'patch'], url_path='reject')
+    def reject(self, request, pk=None):
+        chart = self.get_object()
+        chart.approval_status = 'rejected'
+        notes = request.data.get('notes') or request.data.get('rejection_reason') or ''
+        chart.rejection_reason = notes
+        chart.approved_by = request.user
+        chart.approved_at = dj_timezone.now()
+        chart.save(update_fields=[
+            'approval_status', 'rejection_reason', 'approved_by', 'approved_at', 'updated_at'
+        ])
+        return Response({
+            'status': 'rejected',
+            'approval_status': chart.approval_status,
+            'size_chart': SizeChartAdminSerializer(chart).data,
+        })
+
+
+class ContactBranchAdminViewSet(viewsets.ModelViewSet):
+    """Admin CRUD for contact branches."""
+    permission_classes = [IsAdminUser]
+    serializer_class = ContactBranchAdminSerializer
+    queryset = ContactBranch.objects.all().order_by('branch_name')
