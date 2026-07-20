@@ -172,6 +172,17 @@ class VendorAdminViewSet(viewsets.ModelViewSet):
             
         vendor.save()
         logger.info("admin_updated_vendor_status", admin_id=request.user.id, target_vendor_id=vendor.id, new_status=new_status, has_notes=bool(admin_notes))
+        
+        admin_user = AdminUser.objects.filter(user=request.user).first()
+        if admin_user:
+            AdminActionLog.objects.create(
+                admin=admin_user,
+                action="update_vendor_status",
+                resource_type="Vendor",
+                resource_id=vendor.id,
+                details={"status_changed_to": new_status, "admin_notes": admin_notes}
+            )
+
         return Response({'status': 'vendor status updated', 'vendor_status': vendor.status})
 
 class SystemStatsView(views.APIView):
@@ -451,8 +462,19 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
     def approve(self, request, pk=None):
         product = self.get_object()
         product.approval_status = 'approved'
-        product.save(update_fields=['approval_status'])
+        product.save(update_fields=['approval_status', 'updated_at'])
         logger.info("admin_approved_product", admin_id=request.user.id, product_id=product.id)
+        
+        admin_user = AdminUser.objects.filter(user=request.user).first()
+        if admin_user:
+            AdminActionLog.objects.create(
+                admin=admin_user,
+                action="approve_product",
+                resource_type="Product",
+                resource_id=product.id,
+                details={"status_changed_to": "approved"}
+            )
+            
         return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
     @extend_schema(
@@ -476,8 +498,20 @@ class ProductAdminViewSet(viewsets.ModelViewSet):
         if 'notes' in request.data:
             # Note: We might need a notes field on the product model or admin log
             pass
-        product.save(update_fields=['approval_status'])
+        product.save(update_fields=['approval_status', 'updated_at'])
         logger.info("admin_rejected_product", admin_id=request.user.id, product_id=product.id)
+        
+        notes = request.data.get('notes', '')
+        admin_user = AdminUser.objects.filter(user=request.user).first()
+        if admin_user:
+            AdminActionLog.objects.create(
+                admin=admin_user,
+                action="reject_product",
+                resource_type="Product",
+                resource_id=product.id,
+                details={"status_changed_to": "rejected", "notes": notes}
+            )
+
         return Response({'status': 'approval status updated', 'approval_status': product.approval_status})
 
     @extend_schema(
