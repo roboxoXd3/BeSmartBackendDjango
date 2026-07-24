@@ -973,16 +973,10 @@ class ProductColorImageUploadView(views.APIView):
             update_fields = ['colors']
 
             if color_name.lower() == 'default':
-                import json
-                try:
-                    existing_images = json.loads(product.images) if product.images else []
-                    if not isinstance(existing_images, list):
-                        existing_images = []
-                except Exception:
-                    existing_images = []
-                
+                from .r2_utils import load_product_images, store_product_images
+                existing_images = load_product_images(product)
                 existing_images.insert(0, public_url)
-                product.images = json.dumps(existing_images)
+                store_product_images(product, existing_images)
                 update_fields.append('images')
 
             product.save(update_fields=update_fields)

@@ -1,14 +1,18 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from users.serializers import UserSerializer
 from users.models import User
 from vendors.models import Vendor, VendorPayout, PayoutTransaction
 from orders.serializers import OrderSerializer
-from orders.models import Order
+from orders.models import Order, OrderStatusHistory
 from categories.models import Category, Subcategory
 from loyalty.models import (
     LoyaltyPoints, LoyaltyTransaction, LoyaltyBadge, LoyaltyReward, LoyaltyEarningRule
 )
+from products.models import Product
+from vendors.models import VendorSizeChartTemplate
+from support.models import ContactBranch
 
 class LoyaltyBadgeAdminSerializer(serializers.ModelSerializer):
     class Meta:
@@ -318,3 +322,47 @@ class LoyaltyTransactionAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoyaltyTransaction
         fields = '__all__'
+
+
+class AdminProductDetailSerializer(serializers.ModelSerializer):
+    """Admin can set vendor_id and approval_status (unlike vendor ProductDetailSerializer)."""
+    class Meta:
+        model = Product
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at', 'added_date']
+
+
+class SizeChartAdminSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.SerializerMethodField()
+    vendor_email = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VendorSizeChartTemplate
+        fields = '__all__'
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_vendor_name(self, obj):
+        return getattr(obj.vendor, 'business_name', None) if obj.vendor_id else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_vendor_email(self, obj):
+        return getattr(obj.vendor, 'business_email', None) if obj.vendor_id else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_category_name(self, obj):
+        return obj.category.name if getattr(obj, 'category_id', None) and obj.category else None
+
+
+class ContactBranchAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactBranch
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class OrderStatusHistoryAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderStatusHistory
+        fields = '__all__'
+        read_only_fields = ['id', 'order_id', 'previous_status', 'new_status', 'changed_by', 'notes', 'created_at']

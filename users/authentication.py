@@ -69,6 +69,19 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
                     'username': user_data.email,
                 },
             )
+
+            # Reconcile Django's is_staff with the admin_users table Supabase
+            # writes to, so a new/deactivated admin doesn't need a manual flip.
+            # Superusers are left alone — they may not have an admin_users row.
+            if not user.is_superuser:
+                from admin_api.models import AdminUser
+                is_admin = AdminUser.objects.filter(
+                    email__iexact=user.email, is_active=True
+                ).exists()
+                if user.is_staff != is_admin:
+                    user.is_staff = is_admin
+                    user.save(update_fields=['is_staff'])
+
             return (user, None)
 
         except Exception as e:
