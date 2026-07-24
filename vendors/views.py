@@ -38,6 +38,20 @@ logger = get_logger(__name__)
 def _approved_vendors():
     return Vendor.objects.filter(status='approved', is_active=True)
 
+def _period_start(period, default_days=30):
+    """Resolve a '7d'|'30d'|'90d'|'1y'|'Nd' period string to a start datetime.
+
+    Falls back to `default_days` if the period is missing or not recognized.
+    """
+    from datetime import timedelta
+    now = timezone.now()
+    days = default_days
+    if period == '1y':
+        days = 365
+    elif period and period.endswith('d') and period[:-1].isdigit():
+        days = int(period[:-1])
+    return now - timedelta(days=days)
+
 class VendorListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = VendorListSerializer
@@ -423,15 +437,9 @@ class VendorDashboardStatsView(views.APIView):
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
         period = request.query_params.get('period', '30d')
-        from django.utils import timezone
-        from datetime import timedelta
-        import datetime
         now = timezone.now()
-        start_date = now - timedelta(days=30)
-        if period == '7d': start_date = now - timedelta(days=7)
-        elif period == '90d': start_date = now - timedelta(days=90)
-        elif period == '1y': start_date = now - timedelta(days=365)
-        
+        start_date = _period_start(period)
+
         from orders.models import Order
         all_orders = Order.objects.filter(vendor_id=vendor.id)
         
@@ -471,17 +479,11 @@ class VendorAnalyticsViewsOverTimeView(views.APIView):
     )
     def get(self, request):
         from django.db.models import Count
-        from django.utils import timezone
-        from datetime import timedelta
         from products.models import ProductViews
-        
+
         vendor = get_object_or_404(Vendor, user=request.user)
         period_str = request.query_params.get('period', '30d')
-        days = 30
-        if period_str.endswith('d') and period_str[:-1].isdigit():
-            days = int(period_str[:-1])
-            
-        start_date = timezone.now() - timedelta(days=days)
+        start_date = _period_start(period_str)
         vendor_products = Product.objects.filter(vendor_id=vendor.id).values_list('id', flat=True)
         
         views_qs = ProductViews.objects.filter(
@@ -514,17 +516,10 @@ class VendorAnalyticsSalesView(views.APIView):
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
         period = request.query_params.get('period', '30d')
-        from django.utils import timezone
-        from datetime import timedelta
         from django.db.models.functions import TruncDate
         from django.db.models import Sum, Count
 
-        days = 30
-        if period == '7d': days = 7
-        elif period == '90d': days = 90
-        elif period == '1y': days = 365
-        
-        start_date = timezone.now() - timedelta(days=days)
+        start_date = _period_start(period)
         from orders.models import Order
         orders = Order.objects.filter(vendor_id=vendor.id, created_at__gte=start_date)
         
@@ -648,23 +643,11 @@ class VendorPayoutListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         logger.info("vendor_payout_started")
         vendor = get_object_or_404(Vendor, user=self.request.user)
-        
-        # 1. Check Balance
-        # Aggregate released escrow transactions
-        released_earnings = VendorPayout.objects.filter(
-             vendor=vendor, 
-             escrow_transactions__status='released'
-        ).aggregate(total=Sum('escrow_transactions__amount'))['total'] or 0
-        
-        # But wait, EscrowTransaction has a ForeignKey to Payout?
-        # No, update: EscrowTransaction links to Order and Vendor. Payout links to Vendor and has `squad_transaction_ref`.
-        # When creating a Payout, we should associate 'released' escrow transactions to it? 
-        # Or does `payout_balance` calculation differ?
-        # Usually: Available Balance = (Sum of 'released' EscrowTransactions) - (Sum of 'completed'/'processing' Payouts)
-        
+
+        # Available Balance = (Sum of 'released' EscrowTransactions) - (Sum of 'pending'/'processing'/'completed' Payouts)
         from django.db.models import Sum
         from decimal import Decimal
-        
+
         released = EscrowTransaction.objects.filter(
             vendor=vendor, 
             status='released'
@@ -697,6 +680,10 @@ class VendorPayoutListView(generics.ListCreateAPIView):
         
         transaction_ref = f"PAYOUT_{vendor.id}_{timezone.now().timestamp()}"
         
+        from rest_framework.exceptions import APIException
+        # Currency lives on VendorPayout, not VendorBankAccount.
+        currency = serializer.validated_data.get('currency') or 'NGN'
+
         try:
             # Verify account first? (Should be done on adding bank account)
             # Initiate transfer
@@ -706,28 +693,25 @@ class VendorPayoutListView(generics.ListCreateAPIView):
                 account_name=bank_account.account_name,
                 amount=amount,
                 transaction_ref=transaction_ref,
-                currency=bank_account.currency,
+                currency=currency,
                 remark=f"Payout for {vendor.business_name}"
             )
-            
-            if response.get('status') == 200 and not response.get('error'):
-                 # Squad might return success even if pending
-                 payout = serializer.save(
-                     vendor=vendor, 
-                     status='processing',
-                     squad_transaction_ref=transaction_ref,
-                     bank_account=bank_account
-                 )
-                 logger.info("vendor_payout_initiated", vendor_id=vendor.id, amount=amount, payout_id=payout.id, ref=transaction_ref)
-            else:
-                 logger.error("vendor_payout_failed", vendor_id=vendor.id, amount=amount, reason=response.get('message'))
-                 from rest_framework.exceptions import APIException
-                 raise APIException(f"Transfer failed: {response.get('message')}")
-                 
         except Exception as e:
              logger.error("vendor_payout_error", vendor_id=vendor.id, amount=amount, error=str(e))
-             from rest_framework.exceptions import APIException
              raise APIException(f"Payout processing error: {str(e)}")
+
+        if response.get('status') == 200 and not response.get('error'):
+             # Squad might return success even if pending
+             payout = serializer.save(
+                 vendor=vendor,
+                 status='processing',
+                 squad_transaction_ref=transaction_ref,
+                 bank_account=bank_account
+             )
+             logger.info("vendor_payout_initiated", vendor_id=vendor.id, amount=amount, payout_id=payout.id, ref=transaction_ref)
+        else:
+             logger.error("vendor_payout_failed", vendor_id=vendor.id, amount=amount, reason=response.get('message'))
+             raise APIException(f"Transfer failed: {response.get('message')}")
 
 class SubscriptionPlanListView(generics.ListAPIView):
     permission_classes = [permissions.AllowAny]
@@ -792,7 +776,18 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'sku']
     ordering_fields = ['name', 'price', 'added_date']
 
-    @extend_schema(summary="Get aggregate statistics for vendor products")
+    @extend_schema(
+        summary="Get aggregate statistics for vendor products",
+        description="Aggregate counts across all of the vendor's products. `inStock` is qty > 10, `lowStock` is qty 1-10 (inclusive).",
+        responses={200: inline_serializer("VendorProductStatisticsResponse", {
+            "totalProducts": serializers.IntegerField(),
+            "activeProducts": serializers.IntegerField(),
+            "outOfStock": serializers.IntegerField(),
+            "featuredProducts": serializers.IntegerField(),
+            "inStock": serializers.IntegerField(),
+            "lowStock": serializers.IntegerField(),
+        })}
+    )
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         from django.db.models import Count, Q
@@ -800,11 +795,11 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
             totalProducts=Count('id'),
             activeProducts=Count('id', filter=Q(status='active')),
             outOfStock=Count('id', filter=Q(in_stock=False) | Q(stock_quantity=0)),
-            featuredProducts=Count('id', filter=Q(is_featured=True))
+            featuredProducts=Count('id', filter=Q(is_featured=True)),
+            inStock=Count('id', filter=Q(stock_quantity__gt=10)),
+            lowStock=Count('id', filter=Q(stock_quantity__gte=1, stock_quantity__lte=10)),
         )
         return Response(stats)
-
-    @extend_schema(request=inline_serializer("VendorProductUploadImageReq", {"image": serializers.ImageField()}))
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -843,8 +838,12 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         summary="Upload product image",
+        description="Uploads an image and appends its URL to the product's `images` array (does not overwrite existing images).",
         request={'type': 'object', 'properties': {'image': {'type': 'string', 'format': 'binary'}}},
-        responses={200: inline_serializer(name="ProductImageResponse", fields={"message": serializers.CharField(), "images": serializers.URLField()})}
+        responses={200: inline_serializer(name="ProductImageResponse", fields={
+            "message": serializers.CharField(),
+            "images": serializers.ListField(child=serializers.URLField()),
+        })}
     )
     @action(detail=True, methods=['post'], url_path='upload-image', parser_classes=[MultiPartParser, FormParser])
     def upload_image(self, request, pk=None):
@@ -854,9 +853,14 @@ class VendorOwnProductViewSet(viewsets.ModelViewSet):
             return Response({"error": "No image provided"}, status=status.HTTP_400_BAD_REQUEST)
         file_name = default_storage.save(f"products/{product.id}/{file_obj.name}", file_obj)
         file_url = default_storage.url(file_name)
-        product.images = file_url
-        product.save()
-        return Response({"message": "Image uploaded", "images": file_url})
+
+        from products.r2_utils import load_product_images, store_product_images
+        images = load_product_images(product)
+        if file_url not in images:
+            images.append(file_url)
+        store_product_images(product, images)
+        product.save(update_fields=['images'])
+        return Response({"message": "Image uploaded", "images": images})
 
     @extend_schema(
         summary="Bulk upsert products (JSON list or CSV file)",
@@ -1257,6 +1261,8 @@ class VendorAnalyticsFunnelView(views.APIView):
 
     @extend_schema(
         summary="Vendor analytics funnel",
+        description="Counts of tracked events (view/cart/checkout/purchase) across all of the vendor's products, restricted to the given period.",
+        parameters=[OpenApiParameter('period', OpenApiTypes.STR, description="Period e.g., 7d, 30d, 90d, 1y. Defaults to 30d.", required=False)],
         responses={200: inline_serializer("VendorAnalyticsFunnelRes", fields={
             "views": serializers.IntegerField(),
             "cart": serializers.IntegerField(),
@@ -1266,9 +1272,13 @@ class VendorAnalyticsFunnelView(views.APIView):
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
+        period = request.query_params.get('period', '30d')
+        start_date = _period_start(period)
         from .models import ProductAnalyticsEvent
         from django.db.models import Count
-        events = ProductAnalyticsEvent.objects.filter(vendor=vendor).values('event_type').annotate(count=Count('id'))
+        events = ProductAnalyticsEvent.objects.filter(
+            vendor=vendor, created_at__gte=start_date
+        ).values('event_type').annotate(count=Count('id'))
         event_counts = {item['event_type']: item['count'] for item in events}
         return Response({
             "views": event_counts.get('view', 0),
@@ -1282,26 +1292,40 @@ class VendorAnalyticsPerformanceView(views.APIView):
 
     @extend_schema(
         summary="Vendor product performance",
+        description="Per-product view/cart/purchase counts and conversion rate, restricted to the given period, sorted by views descending.",
+        parameters=[OpenApiParameter('period', OpenApiTypes.STR, description="Period e.g., 7d, 30d, 90d, 1y. Defaults to 30d.", required=False)],
         responses={200: inline_serializer("VendorAnalyticsPerformanceRes", fields={
-            "data": serializers.ListField(child=serializers.DictField())
+            "data": inline_serializer("VendorAnalyticsPerformanceItem", many=True, fields={
+                "product_id": serializers.CharField(),
+                "name": serializers.CharField(),
+                "views": serializers.IntegerField(),
+                "cart": serializers.IntegerField(),
+                "purchases": serializers.IntegerField(),
+                "conversion_rate": serializers.FloatField(),
+                "price": serializers.FloatField(),
+            })
         })}
     )
     def get(self, request):
         vendor = get_object_or_404(Vendor, user=request.user)
+        period = request.query_params.get('period', '30d')
+        start_date = _period_start(period)
         from .models import ProductAnalyticsEvent
         from django.db.models import Count, Q
-        
+
         # Get counts per product
-        product_stats = ProductAnalyticsEvent.objects.filter(vendor=vendor).values('product_id').annotate(
+        product_stats = ProductAnalyticsEvent.objects.filter(
+            vendor=vendor, created_at__gte=start_date
+        ).values('product_id').annotate(
             views=Count('id', filter=Q(event_type='view')),
             purchases=Count('id', filter=Q(event_type='purchase')),
             cart=Count('id', filter=Q(event_type='cart'))
         )
-        
+
         product_ids = [stat['product_id'] for stat in product_stats]
         products = Product.objects.filter(id__in=product_ids)
         product_map = {p.id: p for p in products}
-        
+
         data = []
         for stat in product_stats:
             p = product_map.get(stat['product_id'])
@@ -1318,7 +1342,7 @@ class VendorAnalyticsPerformanceView(views.APIView):
                     "conversion_rate": conversion,
                     "price": float(p.price)
                 })
-        
+
         # Sort by views
         data.sort(key=lambda x: x['views'], reverse=True)
         return Response({"data": data})
