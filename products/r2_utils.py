@@ -1,3 +1,5 @@
+import ast
+import json
 import os
 import threading
 import boto3
@@ -89,3 +91,31 @@ def start_async_upload(job_id, file_path, r2_key, content_type, product_id):
     )
     thread.daemon = True
     thread.start()
+
+
+def load_product_images(product):
+    """Parse Product.images (a TextField holding a JSON-encoded array) into a list.
+
+    Tolerates rows corrupted by older code that stored either a bare URL string
+    or a Python-repr'd list (e.g. "['a', 'b']") instead of proper JSON.
+    """
+    raw = product.images
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return raw
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else [raw]
+    except (ValueError, TypeError):
+        pass
+    try:
+        parsed = ast.literal_eval(raw)
+        return parsed if isinstance(parsed, list) else [raw]
+    except Exception:
+        return [raw]
+
+
+def store_product_images(product, urls):
+    """Serialize a list of image URLs back into Product.images as JSON."""
+    product.images = json.dumps(list(urls))
