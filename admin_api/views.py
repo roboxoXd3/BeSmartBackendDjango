@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, status, views, viewsets
 from rest_framework.response import Response
 from besmart_backend.utils.logger import get_logger
+from besmart_backend.metrics import payout_transfers_total, escrow_operations_total, orders_total
 
 logger = get_logger(__name__)
 from django.shortcuts import get_object_or_404
@@ -675,6 +676,12 @@ class OrderAdminViewSet(viewsets.ModelViewSet):
                     created_at=dj_timezone.now(),
                 )
             logger.info("admin_updated_order_status", admin_id=request.user.id, order_id=order.id, new_status=new_status)
+            # This endpoint doesn't validate new_status against Order.STATUS_CHOICES
+            # today, so guard the metric label against arbitrary client input --
+            # an unbounded label value would create an unbounded number of
+            # Prometheus time series.
+            metric_status = new_status if new_status in dict(Order.STATUS_CHOICES) else "other"
+            orders_total.labels(status=metric_status).inc()
             return Response({'status': 'order status updated', 'order_status': order.status})
         return Response({'error': 'missing status'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -801,6 +808,7 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
                 payout_id=payout.id,
                 error=str(exc),
             )
+            payout_transfers_total.labels(status="error").inc()
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         # Squad responses vary: {success: true} and/or {status: 200}
@@ -820,9 +828,11 @@ class PayoutAdminViewSet(viewsets.ModelViewSet):
             # avoid a duplicate +amount/-amount pair netting to zero.
 
             logger.info("admin_initiated_squad_transfer", admin_id=request.user.id, payout_id=payout.id, ref=ref)
+            payout_transfers_total.labels(status="initiated").inc()
             return Response({'status': 'processing', 'message': 'Transfer initiated successfully'})
         else:
             logger.error("admin_squad_transfer_failed", admin_id=request.user.id, payout_id=payout.id, error=result.get('message'))
+            payout_transfers_total.labels(status="failed").inc()
             return Response({'error': result.get('message', 'Transfer failed')}, status=status.HTTP_400_BAD_REQUEST)
 
 class TransactionAdminViewSet(viewsets.ReadOnlyModelViewSet):
@@ -870,6 +880,7 @@ class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
             vendor = Vendor.objects.select_for_update().get(pk=escrow.vendor_id)
             vendor.available_balance += escrow.amount
             vendor.save(update_fields=['available_balance', 'updated_at'])
+        escrow_operations_total.labels(operation="release", status="success").inc()
         return Response({'status': 'escrow released'})
 
     @extend_schema(
@@ -901,6 +912,7 @@ class EscrowAdminViewSet(viewsets.ReadOnlyModelViewSet):
                 new_balance = vendor.available_balance - escrow.amount
                 vendor.available_balance = new_balance if new_balance > 0 else 0
                 vendor.save(update_fields=['available_balance', 'updated_at'])
+        escrow_operations_total.labels(operation="hold", status="success").inc()
         return Response({'status': 'escrow held'})
 
     @extend_schema(

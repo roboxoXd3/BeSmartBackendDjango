@@ -116,7 +116,10 @@ DB_PORT = os.getenv('DB_PORT')
 if DB_NAME and DB_USER and DB_PASSWORD and DB_HOST:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
+            # django_prometheus wraps the stock postgresql backend to emit
+            # django_db_* metrics (query counts, errors, connections). Behaves
+            # identically to django.db.backends.postgresql otherwise.
+            'ENGINE': 'django_prometheus.db.backends.postgresql',
             'NAME': DB_NAME,
             'USER': DB_USER,
             'PASSWORD': DB_PASSWORD,
@@ -126,10 +129,12 @@ if DB_NAME and DB_USER and DB_PASSWORD and DB_HOST:
         }
     }
 else:
-    # Fallback to sqlite for development if env not set
+    # Fallback to sqlite for development if env not set. Uses the same
+    # django_prometheus-wrapped engine as the postgresql branch above so DB
+    # metrics behave the same locally as in production.
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
+            'ENGINE': 'django_prometheus.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
@@ -330,8 +335,8 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'filters': {
-        'ignore_prometheus': {
-            '()': 'besmart_backend.logging_filters.PrometheusEndpointFilter',
+        'ignore_noisy_endpoints': {
+            '()': 'besmart_backend.logging_filters.NoisyEndpointFilter',
         },
     },
     'formatters': {
@@ -348,7 +353,7 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'json' if not DEBUG else 'plain',
-            'filters': ['ignore_prometheus'],
+            'filters': ['ignore_noisy_endpoints'],
         },
     },
     'loggers': {
@@ -386,7 +391,7 @@ if LOKI_URL:
         'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
         'version': '1',
         'formatter': 'json',
-        'filters': ['ignore_prometheus'],
+        'filters': ['ignore_noisy_endpoints'],
     }
     LOGGING['loggers']['django']['handlers'].append('loki')
     LOGGING['loggers']['besmart_backend']['handlers'].append('loki')

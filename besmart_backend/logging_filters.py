@@ -1,17 +1,34 @@
 import logging
 
-class PrometheusEndpointFilter(logging.Filter):
+# Endpoints hit repeatedly by monitoring probes (scrapers, healthchecks) that would
+# otherwise flood Loki and distort log-rate panels/alerts with noise unrelated to
+# real traffic.
+NOISY_MONITORING_PATHS = ('/prometheus/metrics', '/health/')
+
+
+class NoisyEndpointFilter(logging.Filter):
     """
-    Filter out logs for the Prometheus metrics endpoint to reduce noise,
-    especially from the django.server logger.
+    Filter out access logs for noisy monitoring endpoints (Prometheus scrapes,
+    healthchecks) to reduce log noise -- especially from the django.server logger.
+
+    Uses record.getMessage() (formats record.msg % record.args) rather than
+    inspecting record.args directly -- different loggers put the path in
+    different argument positions (django.server's access log embeds it in a
+    full request-line string at args[0]; django.request's warning/error log
+    for non-2xx responses -- e.g. this filter's own motivating case, a 503
+    from a failing /health/ check -- passes it as args[1], '%s: %s' %
+    (reason_phrase, path)). getMessage() renders either shape into one string
+    that always contains the path if the logger put it there at all.
     """
     def filter(self, record):
         try:
-            # Check if the message contains the prometheus endpoint
-            # This handles django.server which passes the request string in args
-            msg = str(record.args[0]) if hasattr(record, 'args') and len(record.args) > 0 else record.getMessage()
-            if '/prometheus/metrics' in msg:
+            msg = record.getMessage()
+            if any(path in msg for path in NOISY_MONITORING_PATHS):
                 return False
         except Exception:
             pass
         return True
+
+
+# Kept for backwards compatibility with any external references to the old name.
+PrometheusEndpointFilter = NoisyEndpointFilter

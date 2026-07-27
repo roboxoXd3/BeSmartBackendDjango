@@ -11,6 +11,7 @@ import uuid
 import requests as http_requests
 
 from besmart_backend.utils.logger import get_logger
+from besmart_backend.metrics import payment_attempts_total, payout_transfers_total
 logger = get_logger(__name__)
 class PaymentMethodListView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -124,8 +125,10 @@ class InitiatePaymentView(views.APIView):
             if squad_response.get('status') == 200:
                 checkout_url = squad_response['data']['checkout_url']
                 transaction_ref = squad_response['data'].get('transaction_ref', transaction_ref)
+                payment_attempts_total.labels(operation="initiate", status="success").inc()
             else:
                 logger.error("payment_initiation_failed", order_id=order.id, reason=squad_response.get('message', 'gateway error'))
+                payment_attempts_total.labels(operation="initiate", status="failed").inc()
                 return Response({
                     'status': 'error',
                     'message': squad_response.get('message', 'Payment gateway error'),
@@ -133,6 +136,7 @@ class InitiatePaymentView(views.APIView):
 
         except Exception as e:
             logger.error("payment_initiation_error", order_id=order.id, error=str(e))
+            payment_attempts_total.labels(operation="initiate", status="error").inc()
             return Response({
                 'status': 'error',
                 'message': f'Could not reach payment gateway: {str(e)}',
@@ -182,6 +186,7 @@ class VerifyPaymentView(views.APIView):
             logger.info("payment_gateway_verify_completed", transaction_ref=transaction_ref, payment_status=payment_status, is_successful=is_successful)
         except Exception as e:
             logger.error("payment_verification_error", transaction_ref=transaction_ref, error=str(e))
+            payment_attempts_total.labels(operation="verify", status="error").inc()
             return Response({
                 'status': 'error',
                 'message': f'Could not reach payment gateway: {str(e)}',
@@ -197,6 +202,7 @@ class VerifyPaymentView(views.APIView):
                         order.squad_gateway_ref = gateway_ref
                     order.save()
                     logger.info("payment_verified", order_id=order.id, transaction_ref=transaction_ref)
+                payment_attempts_total.labels(operation="verify", status="success").inc()
                 return Response({
                     "status": "success",
                     "message": "Payment verified and order confirmed",
@@ -204,12 +210,14 @@ class VerifyPaymentView(views.APIView):
                 })
             except Order.DoesNotExist:
                 logger.warning("payment_verification_order_not_found", transaction_ref=transaction_ref)
+                payment_attempts_total.labels(operation="verify", status="failed").inc()
                 return Response(
                     {"status": "error", "message": "Order not found for this reference"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
         logger.error("payment_verification_failed", transaction_ref=transaction_ref, payment_status=payment_status)
+        payment_attempts_total.labels(operation="verify", status="failed").inc()
         return Response(
             {"status": "error", "message": f"Payment not successful. Status: {payment_status}"},
             status=status.HTTP_400_BAD_REQUEST,
@@ -266,7 +274,7 @@ class PaymentWebhookView(views.APIView):
                         order.status = 'confirmed'
                         order.squad_gateway_ref = body.get('gateway_transaction_ref', '')
                         order.save()
-                    
+
                     if token_id:
                         # Save token to user's payment methods
                         from .models import PaymentMethod
@@ -279,8 +287,14 @@ class PaymentWebhookView(views.APIView):
                                 'is_default': not PaymentMethod.objects.filter(user=order.user, is_default=True).exists()
                             }
                         )
+                    payment_attempts_total.labels(operation="webhook_charge", status="success").inc()
                 except Order.DoesNotExist:
-                    pass
+                    # A charge_successful webhook for a transaction_ref we have no
+                    # matching order for is a genuine reconciliation problem (money
+                    # moved on Squad's side with nothing to mark paid on ours) --
+                    # was previously silent.
+                    payment_attempts_total.labels(operation="webhook_charge", status="failed").inc()
+                    logger.warning("payment_webhook_order_not_found", transaction_ref=transaction_ref)
 
         elif event in ('transfer_successful', 'transfer_failed'):
             from django.utils import timezone
@@ -340,6 +354,7 @@ class PaymentWebhookView(views.APIView):
                                     reference_id=transaction_ref,
                                     description=f'Payout completed - {payout.vendor.business_name}',
                                 )
+                                payout_transfers_total.labels(status="completed").inc()
                         else:
                             # Failure: only from processing. Do not bump pending_payouts —
                             # process_transfer never decremented it on initiate.
@@ -349,6 +364,7 @@ class PaymentWebhookView(views.APIView):
                                 payout.failure_reason = reason
                                 payout.completed_at = timezone.now()
                                 payout.save(update_fields=['status', 'failure_reason', 'completed_at'])
+                                payout_transfers_total.labels(status="failed").inc()
             except Exception as exc:
                 logger.error(
                     "transfer_webhook_processing_failed",
@@ -356,6 +372,7 @@ class PaymentWebhookView(views.APIView):
                     transaction_ref=transaction_ref,
                     error=str(exc),
                 )
+                payout_transfers_total.labels(status="error").inc()
 
         return Response({"status": "received"}, status=status.HTTP_200_OK)
 

@@ -11,6 +11,7 @@ from .serializers import (
 )
 from drf_spectacular.utils import extend_schema, inline_serializer
 from besmart_backend.utils.logger import get_logger
+from besmart_backend.metrics import orders_total
 
 logger = get_logger(__name__)
 
@@ -355,6 +356,11 @@ class OrderListCreateView(generics.ListCreateAPIView):
             status=order_status,
         )
         logger.info("order_record_created", order_id=order.id, status=order_status)
+        # order_status here is always 'confirmed' or 'pending' (see above), both
+        # valid Order.STATUS_CHOICES, but guard anyway in case that logic changes --
+        # an unrecognized value must never become a label (see metrics.py).
+        metric_status = order_status if order_status in dict(Order.STATUS_CHOICES) else "other"
+        orders_total.labels(status=metric_status).inc()
 
         if order_products is not None:
             # Direct items
@@ -618,6 +624,7 @@ class OrderReorderView(views.APIView):
         )
         for item in items:
             OrderItem.objects.create(order=order, product=item.product, quantity=item.quantity, price=item.price, selected_size=item.selected_size, selected_color=item.selected_color)
+        orders_total.labels(status=order.status).inc()
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
