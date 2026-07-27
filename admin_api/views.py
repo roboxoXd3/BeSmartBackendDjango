@@ -61,6 +61,40 @@ class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = AdminUser.objects.all()
     serializer_class = AdminUserSerializer
 
+    def _sync_django_staff_flag(self, admin_user, *, is_active):
+        """
+        Mirror the admin_users row onto Django's is_staff immediately, instead of
+        waiting for the admin's next Supabase login (see
+        users.authentication.SupabaseAuthentication for the lazy-sync fallback,
+        which still covers admins who haven't logged in yet when this row is
+        created/updated).
+        """
+        django_user = admin_user.user
+        if django_user is None:
+            django_user = User.objects.filter(email__iexact=admin_user.email).first()
+            if django_user is not None:
+                admin_user.user = django_user
+                admin_user.save(update_fields=['user'])
+
+        if django_user is None or django_user.is_superuser:
+            return
+
+        if django_user.is_staff != is_active:
+            django_user.is_staff = is_active
+            django_user.save(update_fields=['is_staff'])
+
+    def perform_create(self, serializer):
+        admin_user = serializer.save()
+        self._sync_django_staff_flag(admin_user, is_active=admin_user.is_active)
+
+    def perform_update(self, serializer):
+        admin_user = serializer.save()
+        self._sync_django_staff_flag(admin_user, is_active=admin_user.is_active)
+
+    def perform_destroy(self, instance):
+        self._sync_django_staff_flag(instance, is_active=False)
+        instance.delete()
+
 class AdminSessionViewSet(viewsets.ModelViewSet):
     """
     Internal API for the Next.js admin BFF to manage admin sessions.
