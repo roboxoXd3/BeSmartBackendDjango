@@ -11,6 +11,7 @@ urlpatterns = [
     path('methods/<uuid:pk>/', views.PaymentMethodDetailView.as_view(), name='payment-method-detail'),
     path('methods/<uuid:pk>/set-default/', views.PaymentMethodSetDefaultView.as_view(), name='payment-method-set-default'),
     path('webhook/', views.PaymentWebhookView.as_view(), name='squad-webhook'),
+    path('webhook', views.PaymentWebhookView.as_view(), name='squad-webhook-no-slash'),
     path('initiate/', views.InitiatePaymentView.as_view(), name='initiate-payment'),
     path('verify/<str:ref>/', views.VerifyPaymentView.as_view(), name='verify-payment'),
     path('charge-token/', views.ChargeTokenView.as_view(), name='charge-token'),
