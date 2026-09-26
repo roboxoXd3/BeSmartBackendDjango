@@ -1,7 +1,7 @@
 from rest_framework import authentication
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from supabase import create_client
+from supabase import ClientOptions, create_client
 
 from besmart_backend.metrics import auth_attempts_total
 from besmart_backend.utils.logger import get_logger
@@ -17,12 +17,19 @@ except ImportError:
     # crashing the whole auth path.
     AuthApiError = None
 
+def server_client_options():
+    # We only proxy calls; the frontend owns the session. With the defaults, every
+    # sign-in/refresh would start a background timer that keeps refreshing (and
+    # rotating) the user's refresh token behind the frontend's back.
+    return ClientOptions(auto_refresh_token=False, persist_session=False)
+
+
 def get_supabase_client():
     url = settings.SUPABASE_URL
     key = settings.SUPABASE_KEY
     if not url or not key:
         raise ValueError("Supabase credentials not configured.")
-    return create_client(url, key)
+    return create_client(url, key, options=server_client_options())
 
 
 def sync_supabase_user(user_data):
@@ -103,6 +110,13 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
                 return None
 
             user = sync_supabase_user(user_data)
+
+            # Suspended (admin) or self-deleted accounts keep a valid Supabase
+            # token until it expires; don't authenticate them.
+            if not user.is_active:
+                auth_attempts_total.labels(result="inactive_user").inc()
+                logger.info("supabase_auth_inactive_user", user_id=str(user.id))
+                return None
 
             auth_attempts_total.labels(result="success").inc()
             return (user, None)

@@ -18,32 +18,26 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email', 'username', 'is_active', 'date_joined', 'profile']
         read_only_fields = ['id', 'is_active', 'date_joined']
 
-class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    full_name = serializers.CharField(required=False)
-    phone_number = serializers.CharField(required=False)
+class RegisterSerializer(serializers.Serializer):
+    email = serializers.EmailField(help_text="Email to register in Supabase Auth.")
+    password = serializers.CharField(write_only=True, help_text="Password (Supabase password rules apply, min 6 characters by default).")
+    full_name = serializers.CharField(required=False, allow_blank=True, help_text="Stored on the user's profile.")
+    first_name = serializers.CharField(required=False, allow_blank=True, help_text="Legacy alias used as full_name when full_name is not sent.")
+    phone_number = serializers.CharField(required=False, allow_blank=True, help_text="Stored on the user's profile.")
+    redirect_to = serializers.URLField(required=False, help_text="Where the email-confirmation link should send the user. Must be in Supabase's allowed redirect URLs; defaults to the Supabase Site URL.")
 
-    class Meta:
-        model = User
-        fields = ['email', 'password', 'full_name', 'phone_number']
+class RegisterResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user = serializers.DictField(help_text="`{id, email}` of the new Supabase user.")
+    email_confirmation_required = serializers.BooleanField(help_text="True when the user must confirm their email before logging in; tokens are then null.")
+    access_token = serializers.CharField(allow_null=True)
+    refresh_token = serializers.CharField(allow_null=True)
+    token_type = serializers.CharField(allow_null=True)
+    expires_in = serializers.IntegerField(allow_null=True)
+    expires_at = serializers.IntegerField(allow_null=True)
 
-    def create(self, validated_data):
-        profile_data = {
-            'full_name': validated_data.pop('full_name', ''),
-            'phone_number': validated_data.pop('phone_number', '')
-        }
-        password = validated_data.pop('password')
-        email = validated_data.get('email')
-        
-        # Username is same as email
-        user = User.objects.create_user(
-            username=email,
-            email=email,
-            password=password
-        )
-        
-        Profile.objects.create(id=user, **profile_data)
-        return user
+class MessageSerializer(serializers.Serializer):
+    message = serializers.CharField()
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(help_text="Email of the Supabase Auth user.")
@@ -92,14 +86,22 @@ class AuthErrorSerializer(serializers.Serializer):
     error = serializers.CharField()
 
 class LogoutSerializer(serializers.Serializer):
-    refresh = serializers.CharField(required=False) # Optional because Supabase client might just clear storage
+    scope = serializers.ChoiceField(
+        choices=["local", "global", "others"], required=False, default="local",
+        help_text="`local` ends only this session, `global` ends every session of the user, `others` ends every session except this one.",
+    )
+    refresh = serializers.CharField(required=False, help_text="Ignored. Accepted for backwards compatibility.")
 
 class PasswordResetSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    redirect_to = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(help_text="Email of the account to reset.")
+    redirect_to = serializers.CharField(required=False, allow_blank=True, help_text="Page the reset link opens (your 'set new password' screen). Must be in Supabase's allowed redirect URLs; defaults to the Supabase Site URL.")
 
 class PasswordChangeSerializer(serializers.Serializer):
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, help_text="The new password.")
+    current_password = serializers.CharField(write_only=True, required=False, help_text="Optional. When sent, it is verified before the password is changed. Omit it in the reset-password flow, where the user doesn't know it.")
+
+class AccountDeleteSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, help_text="The user's current password, to confirm the deletion.")
 
 class ProfilePhotoUploadSerializer(serializers.Serializer):
     file = serializers.ImageField(help_text="The profile photo image file to upload.")

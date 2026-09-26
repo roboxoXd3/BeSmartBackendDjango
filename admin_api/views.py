@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from .serializers import (
     AdminUserSerializer, AdminActionLogSerializer,
-    AppSettingsSerializer, UserManagementSerializer, UserAdminCreateUpdateSerializer,
+    AppSettingsSerializer, UserManagementSerializer, UserAdminCreateUpdateSerializer, check_can_manage_user,
     VendorAdminSerializer, PayoutAdminSerializer,
     TransactionAdminSerializer, OrderAdminSerializer,
     CategoryAdminSerializer, SubcategoryAdminSerializer,
@@ -43,7 +43,7 @@ from products.serializers import ProductListSerializer
 from support.models import ContactBranch
 from django.utils import timezone as dj_timezone
 from orders.serializers import OrderSerializer
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer, OpenApiParameter, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers, filters
 from rest_framework.decorators import action
@@ -122,6 +122,51 @@ class AppSettingsViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
 
+from users.serializers import AuthErrorSerializer
+
+_USER_ADMIN_ERRORS = {
+    400: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Validation error, email already registered in Supabase, password too weak, or (update) the user has no Supabase login. Body is `{\"error\": ...}` or field errors."),
+    403: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Caller is not an admin, or (update/delete) the target is a superuser, another staff account or the caller themselves and the caller isn't a superuser. Body: `{\"detail\": ...}`."),
+    404: OpenApiResponse(response=OpenApiTypes.OBJECT, description="User not found."),
+    429: OpenApiResponse(response=AuthErrorSerializer, description="Supabase Auth rate limit reached."),
+    502: OpenApiResponse(response=AuthErrorSerializer, description="Supabase Auth could not be reached."),
+    503: OpenApiResponse(response=AuthErrorSerializer, description="SUPABASE_SERVICE_ROLE_KEY is not configured on the server."),
+}
+
+
+@extend_schema_view(
+    create=extend_schema(
+        summary="Create user (Supabase Auth + Django)",
+        description=(
+            "Creates the login in Supabase Auth (email pre-confirmed, so the user can log in immediately) and a "
+            "Django user + profile with the same id. Without `password`, the user must set one via "
+            "`POST /api/auth/password/reset/`."
+        ),
+        request=UserAdminCreateUpdateSerializer,
+        responses={201: UserAdminCreateUpdateSerializer, **{k: v for k, v in _USER_ADMIN_ERRORS.items() if k != 404}},
+    ),
+    update=extend_schema(
+        summary="Update user (Supabase Auth + Django)",
+        description="`password` and `email` are changed in Supabase Auth first (no confirmation email), then the Django user/profile is updated.",
+        request=UserAdminCreateUpdateSerializer,
+        responses={200: UserAdminCreateUpdateSerializer, **_USER_ADMIN_ERRORS},
+    ),
+    partial_update=extend_schema(
+        summary="Partially update user (Supabase Auth + Django)",
+        description="Send only the fields to change. `password` and `email` are changed in Supabase Auth first (no confirmation email), then the Django user/profile is updated.",
+        request=UserAdminCreateUpdateSerializer,
+        responses={200: UserAdminCreateUpdateSerializer, **_USER_ADMIN_ERRORS},
+    ),
+    destroy=extend_schema(
+        summary="Delete user (Supabase Auth + Django)",
+        description=(
+            "Permanently deletes the Django user (cascading to their Django data) and their Supabase Auth login. "
+            "To block a user reversibly use `PATCH /api/admin/users/{id}/status/` with `suspend` instead."
+        ),
+        responses={204: None, 403: _USER_ADMIN_ERRORS[403], 404: _USER_ADMIN_ERRORS[404],
+                   502: _USER_ADMIN_ERRORS[502], 503: _USER_ADMIN_ERRORS[503]},
+    ),
+)
 class UserAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     queryset = User.objects.select_related('profile').all().order_by('-date_joined')
@@ -131,8 +176,32 @@ class UserAdminViewSet(viewsets.ModelViewSet):
             return UserAdminCreateUpdateSerializer
         return UserManagementSerializer
 
+    def perform_destroy(self, instance):
+        from users.supabase_gateway import call_supabase, SupabaseAuthError
+        check_can_manage_user(self.request.user, instance)
+        user_id = str(instance.id)
+        # Supabase delete inside the transaction: if it fails the Django delete rolls back.
+        with transaction.atomic():
+            instance.delete()
+            try:
+                call_supabase(
+                    "admin_user_delete",
+                    lambda supabase: supabase.auth.admin.delete_user(user_id),
+                    admin=True,
+                    client_error_status=400,
+                )
+            except SupabaseAuthError as e:
+                if e.supabase_code != "user_not_found":
+                    raise
+        logger.info("admin_deleted_user", admin_id=str(self.request.user.id), target_user_id=user_id)
+
     @extend_schema(
         summary="Update user status (suspend/activate)",
+        description=(
+            "`suspend` sets `is_active=false`: the user can no longer log in or refresh (403 \"This account has been "
+            "disabled.\") and their existing access tokens are rejected. `activate` reverses it. Staff can't change "
+            "superusers, other staff or themselves (403)."
+        ),
         request=inline_serializer(
             name="UserStatusRequest",
             fields={"action": serializers.ChoiceField(choices=["suspend", "activate"])}
@@ -146,6 +215,7 @@ class UserAdminViewSet(viewsets.ModelViewSet):
     def status(self, request, pk=None):
         logger.info("admin_user_status_update_started", admin_id=request.user.id, target_user_id=pk)
         user = self.get_object()
+        check_can_manage_user(request.user, user)
         action_type = request.data.get('action')
         if action_type == 'suspend':
             user.is_active = False

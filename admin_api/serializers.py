@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 from drf_spectacular.utils import extend_schema_field
 from .models import AdminUser, AdminActionLog, AppSettings, AdminSession
 from users.serializers import UserSerializer
@@ -36,6 +37,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
         model = AdminUser
         fields = '__all__'
         read_only_fields = ['created_at', 'updated_at', 'last_login_at']
+        extra_kwargs = {'password_hash': {'write_only': True}}
 
 class AdminSessionSerializer(serializers.ModelSerializer):
     admin_user = AdminUserSerializer(source='admin', read_only=True)
@@ -81,59 +83,163 @@ class UserManagementSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+def check_can_manage_user(caller, target):
+    """
+    Staff can manage customers and vendors. Superusers and other staff accounts
+    (and your own account) can only be changed by a superuser.
+    """
+    from rest_framework.exceptions import PermissionDenied
+    if caller.is_superuser:
+        if caller.pk == target.pk:
+            raise PermissionDenied("You can't change your own account here.")
+        return
+    if target.is_superuser or target.is_staff:
+        raise PermissionDenied("Only a superuser can manage admin accounts.")
+
+
 class UserAdminCreateUpdateSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    """
+    Admin create/update of a user. Supabase Auth is the source of truth for
+    logins, so the Supabase user is created/updated first (service-role key)
+    and Django mirrors it with the same id.
+    """
+    email = serializers.EmailField(
+        required=False,
+        validators=[UniqueValidator(queryset=User.objects.all(), lookup='iexact', message="A user with this email already exists.")],
+        help_text="Required on create. Changing it also changes the Supabase login email (no confirmation email is sent).",
+    )
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True, help_text="Sets the Supabase login password. On create, omit it to create a user that must use the password-reset flow.")
     phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
     role = serializers.ChoiceField(choices=[('customer', 'Customer'), ('vendor', 'Vendor'), ('admin', 'Admin')], write_only=True, required=False)
-    
+
     class Meta:
         model = User
         fields = ['id', 'email', 'password', 'is_active', 'first_name', 'last_name', 'phone_number', 'role']
         read_only_fields = ['id']
 
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get('email'):
+            raise serializers.ValidationError({"email": ["This field is required."]})
+        request = self.context.get('request')
+        caller = getattr(request, 'user', None)
+        if self.instance is not None and caller is not None:
+            check_can_manage_user(caller, self.instance)
+        # An email listed in admin_users makes its owner staff on their next request.
+        if attrs.get('email') and caller is not None and not caller.is_superuser:
+            if AdminUser.objects.filter(email__iexact=attrs['email'], is_active=True).exists():
+                raise serializers.ValidationError({"email": ["This email belongs to an admin account; only a superuser can assign it."]})
+        return attrs
+
     def create(self, validated_data):
+        from django.db import transaction
+        from users.models import Profile
+        from users.supabase_gateway import call_supabase, SupabaseAuthError
+
         password = validated_data.pop('password', None)
         phone_number = validated_data.pop('phone_number', None)
         role = validated_data.pop('role', 'customer')
-        if 'username' not in validated_data and 'email' in validated_data:
-            validated_data['username'] = validated_data['email']
-        user = User(**validated_data)
-        if password:
-            user.set_password(password)
-        else:
-            user.set_unusable_password()
-        user.save()
+        email = validated_data['email']
+        full_name = f"{validated_data.get('first_name', '')} {validated_data.get('last_name', '')}".strip()
 
-        # Profile creation/update
-        from users.models import Profile
-        Profile.objects.update_or_create(id=user, defaults={
-            'phone_number': phone_number,
-            'role': role,
-            'full_name': f"{user.first_name} {user.last_name}".strip()
-        })
-        
+        attributes = {
+            "email": email,
+            "email_confirm": True,
+            # The on_auth_user_created trigger copies full_name and role into profiles.
+            "user_metadata": {"full_name": full_name, "phone_number": phone_number or "", "role": role},
+        }
+        if password:
+            attributes["password"] = password
+        supabase_user = call_supabase(
+            "admin_user_create",
+            lambda supabase: supabase.auth.admin.create_user(attributes),
+            admin=True,
+            client_error_status=400,
+        ).user
+
+        try:
+            with transaction.atomic():
+                validated_data.setdefault('username', email)
+                user = User(id=supabase_user.id, **validated_data)
+                user.set_unusable_password()
+                user.save()
+                Profile.objects.update_or_create(id=user, defaults={
+                    'phone_number': phone_number,
+                    'role': role,
+                    'full_name': full_name,
+                })
+        except Exception:
+            # Don't leave a Supabase login (or the profile row its trigger inserted) behind.
+            try:
+                call_supabase("admin_user_create_rollback", lambda supabase: supabase.auth.admin.delete_user(str(supabase_user.id)), admin=True)
+            except SupabaseAuthError:
+                pass
+            Profile.objects.filter(pk=supabase_user.id).delete()
+            raise
+
         return user
 
     def update(self, instance, validated_data):
+        from django.db import transaction
+        from users.supabase_gateway import call_supabase, SupabaseAuthError
+
         password = validated_data.pop('password', None)
         phone_number = validated_data.pop('phone_number', None)
         role = validated_data.pop('role', None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        if password:
-            instance.set_password(password)
-        instance.save()
 
-        # Profile update
-        if phone_number is not None or role is not None:
-            from users.models import Profile
-            profile, _ = Profile.objects.get_or_create(id=instance)
-            if phone_number is not None:
-                profile.phone_number = phone_number
-            if role is not None:
-                profile.role = role
-            profile.full_name = f"{instance.first_name} {instance.last_name}".strip()
-            profile.save()
+        supabase_changes = {}
+        if password:
+            supabase_changes["password"] = password
+        old_email = instance.email
+        new_email = validated_data.get('email')
+        email_changed = bool(new_email) and new_email.lower() != (old_email or '').lower()
+        if email_changed:
+            supabase_changes.update(email=new_email, email_confirm=True)
+            # Keep username == email so a later sign-up with the old email doesn't collide.
+            validated_data['username'] = new_email
+        if supabase_changes:
+            try:
+                call_supabase(
+                    "admin_user_update",
+                    lambda supabase: supabase.auth.admin.update_user_by_id(str(instance.id), supabase_changes),
+                    admin=True,
+                    client_error_status=400,
+                )
+            except SupabaseAuthError as e:
+                if e.supabase_code == "user_not_found":
+                    raise SupabaseAuthError(
+                        "This user only exists in Django and has no Supabase login, so its email/password can't be changed.",
+                        400, e.supabase_code,
+                    )
+                raise
+
+        try:
+            with transaction.atomic():
+                for attr, value in validated_data.items():
+                    setattr(instance, attr, value)
+                instance.save()
+
+                # Profile update
+                if phone_number is not None or role is not None:
+                    from users.models import Profile
+                    profile, _ = Profile.objects.get_or_create(id=instance)
+                    if phone_number is not None:
+                        profile.phone_number = phone_number
+                    if role is not None:
+                        profile.role = role
+                    profile.full_name = f"{instance.first_name} {instance.last_name}".strip()
+                    profile.save()
+        except Exception:
+            if email_changed:
+                # Put the Supabase login email back so both sides still agree.
+                try:
+                    call_supabase(
+                        "admin_user_update_revert",
+                        lambda supabase: supabase.auth.admin.update_user_by_id(str(instance.id), {"email": old_email, "email_confirm": True}),
+                        admin=True,
+                    )
+                except SupabaseAuthError:
+                    pass
+            raise
 
         return instance
 

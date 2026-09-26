@@ -181,6 +181,7 @@ AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_BUCKET', 'my-assets')
 # Supabase Auth Configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET')
 
 # Bucket Names
