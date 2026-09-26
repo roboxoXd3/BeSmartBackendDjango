@@ -24,6 +24,33 @@ def get_supabase_client():
         raise ValueError("Supabase credentials not configured.")
     return create_client(url, key)
 
+
+def sync_supabase_user(user_data):
+    """
+    Mirror a Supabase auth user into Django and reconcile is_staff with the
+    admin_users table Supabase writes to, so a new/deactivated admin doesn't
+    need a manual flip. Superusers are left alone — they may not have an
+    admin_users row.
+    """
+    user, _ = User.objects.get_or_create(
+        id=user_data.id,
+        defaults={
+            'email': user_data.email,
+            'username': user_data.email,
+        },
+    )
+
+    if not user.is_superuser:
+        from admin_api.models import AdminUser
+        is_admin = AdminUser.objects.filter(
+            email__iexact=user.email, is_active=True
+        ).exists()
+        if user.is_staff != is_admin:
+            user.is_staff = is_admin
+            user.save(update_fields=['is_staff'])
+
+    return user
+
 try:
     from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
@@ -75,25 +102,7 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
                 auth_attempts_total.labels(result="invalid_token").inc()
                 return None
 
-            user, _ = User.objects.get_or_create(
-                id=user_data.id,
-                defaults={
-                    'email': user_data.email,
-                    'username': user_data.email,
-                },
-            )
-
-            # Reconcile Django's is_staff with the admin_users table Supabase
-            # writes to, so a new/deactivated admin doesn't need a manual flip.
-            # Superusers are left alone — they may not have an admin_users row.
-            if not user.is_superuser:
-                from admin_api.models import AdminUser
-                is_admin = AdminUser.objects.filter(
-                    email__iexact=user.email, is_active=True
-                ).exists()
-                if user.is_staff != is_admin:
-                    user.is_staff = is_admin
-                    user.save(update_fields=['is_staff'])
+            user = sync_supabase_user(user_data)
 
             auth_attempts_total.labels(result="success").inc()
             return (user, None)
