@@ -1,7 +1,7 @@
 """
 Checks that /prometheus/metrics is protected by METRICS_TOKEN:
-  - no credentials / wrong token -> 401 (or 404 when METRICS_TOKEN isn't configured
-    and DEBUG is off: then the endpoint is hidden entirely)
+  - no credentials / wrong token -> 401 (the target must have METRICS_TOKEN set;
+    without it the endpoint is hidden and returns 404 for everyone)
   - correct token as `Authorization: Bearer` -> 200 with django_http_* series
   - responses use the classic text format (0.0.4) unless the scraper asks for a newer one
   - correct token as the HTTP Basic auth password (how Grafana Cloud's hosted

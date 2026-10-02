@@ -4,7 +4,8 @@ Auth wrapper for the Prometheus scrape endpoint (/prometheus/metrics).
 The endpoint lists every view with its traffic and error counts, so it isn't
 public. Scrapers (Grafana Cloud's hosted "Metrics Endpoint" job) authenticate
 with METRICS_TOKEN, either as `Authorization: Bearer <token>` or as the
-password of HTTP Basic auth (any username).
+password of HTTP Basic auth (any username). Without METRICS_TOKEN set the
+endpoint returns 404; set any value locally to read it.
 """
 import base64
 import hmac
@@ -52,9 +53,8 @@ def _presented_token(request):
 def metrics_view(request):
     token = getattr(settings, 'METRICS_TOKEN', None)
     if not token:
-        # Unconfigured: open for local development only, invisible elsewhere.
-        if settings.DEBUG:
-            return _export(request)
+        # Unconfigured: hidden. (Not "open when DEBUG": DEBUG defaults to on, so
+        # an environment that forgets to set it would expose the metrics.)
         return HttpResponseNotFound()
 
     presented = _presented_token(request)

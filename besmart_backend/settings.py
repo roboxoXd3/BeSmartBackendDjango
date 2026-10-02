@@ -337,7 +337,7 @@ LOKI_PASSWORD = os.getenv('LOKI_PASSWORD')
 LOKI_SECONDARY_URL = os.getenv('LOKI_SECONDARY_URL')
 LOKI_SECONDARY_USERNAME = os.getenv('LOKI_SECONDARY_USERNAME')
 LOKI_SECONDARY_PASSWORD = os.getenv('LOKI_SECONDARY_PASSWORD')
-# Required to read /prometheus/metrics outside DEBUG (Bearer token, or Basic auth password).
+# Required to read /prometheus/metrics (Bearer token, or Basic auth password); unset = 404.
 METRICS_TOKEN = os.getenv('METRICS_TOKEN')
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'local' if DEBUG else 'production')
 
@@ -400,6 +400,12 @@ LOKI_TARGETS = [
 for handler_name, loki_url, loki_username, loki_password in LOKI_TARGETS:
     if not loki_url:
         continue
+    if bool(loki_username) != bool(loki_password):
+        # Half-configured auth means every push gets a 401 and every log line
+        # prints a "Logging error" traceback; say so once at startup instead.
+        import sys
+        print(f"WARNING: {handler_name}: Loki URL is set but only one of username/password is; "
+              "logs will be rejected by Loki.", file=sys.stderr)
     LOGGING['handlers'][handler_name] = {
         '()': 'logging_loki.LokiQueueHandler',
         'queue': queue.Queue(-1),
