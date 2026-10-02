@@ -333,10 +333,6 @@ LOKI_URL = os.getenv('LOKI_URL') # e.g., 'http://loki:3100/loki/api/v1/push'
 # Basic auth for Loki (Grafana Cloud: username = Loki user ID, password = access policy token with logs:write).
 LOKI_USERNAME = os.getenv('LOKI_USERNAME')
 LOKI_PASSWORD = os.getenv('LOKI_PASSWORD')
-# Optional second Loki to ship the same logs to, e.g. while running old and new side by side.
-LOKI_SECONDARY_URL = os.getenv('LOKI_SECONDARY_URL')
-LOKI_SECONDARY_USERNAME = os.getenv('LOKI_SECONDARY_USERNAME')
-LOKI_SECONDARY_PASSWORD = os.getenv('LOKI_SECONDARY_PASSWORD')
 # Required to read /prometheus/metrics (Bearer token, or Basic auth password); unset = 404.
 METRICS_TOKEN = os.getenv('METRICS_TOKEN')
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'local' if DEBUG else 'production')
@@ -393,35 +389,46 @@ LOGGING = {
 
 import queue
 
-LOKI_TARGETS = [
-    ('loki', LOKI_URL, LOKI_USERNAME, LOKI_PASSWORD),
-    ('loki_secondary', LOKI_SECONDARY_URL, LOKI_SECONDARY_USERNAME, LOKI_SECONDARY_PASSWORD),
-]
-for handler_name, loki_url, loki_username, loki_password in LOKI_TARGETS:
-    if not loki_url:
-        continue
-    if bool(loki_username) != bool(loki_password):
-        # Half-configured auth means every push gets a 401 and every log line
-        # prints a "Logging error" traceback; say so once at startup instead.
-        import sys
-        print(f"WARNING: {handler_name}: Loki URL is set but only one of username/password is; "
-              "logs will be rejected by Loki.", file=sys.stderr)
-    LOGGING['handlers'][handler_name] = {
+from besmart_backend.otel_logging import otlp_logs_configured
+
+if LOKI_URL and bool(LOKI_USERNAME) != bool(LOKI_PASSWORD):
+    # Half-configured auth means every push gets a 401 and every log line
+    # prints a "Logging error" traceback; say so once at startup instead.
+    import sys
+    print("WARNING: LOKI_URL is set but only one of LOKI_USERNAME/LOKI_PASSWORD is; "
+          "logs will be rejected by Loki.", file=sys.stderr)
+
+if LOKI_URL:
+    LOGGING['handlers']['loki'] = {
         '()': 'logging_loki.LokiQueueHandler',
         'queue': queue.Queue(-1),
-        'url': loki_url,
+        'url': LOKI_URL,
         'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
-        'auth': (loki_username, loki_password) if loki_username and loki_password else None,
+        'auth': (LOKI_USERNAME, LOKI_PASSWORD) if LOKI_USERNAME and LOKI_PASSWORD else None,
         'version': '1',
         'formatter': 'json',
         'filters': ['ignore_noisy_endpoints'],
     }
-    LOGGING['loggers']['django']['handlers'].append(handler_name)
-    LOGGING['loggers']['besmart_backend']['handlers'].append(handler_name)
 
-    # Append Loki handler to all our local apps
+# OTLP log export (Grafana Cloud). Can run alongside Loki, e.g. during a migration.
+if otlp_logs_configured():
+    LOGGING['handlers']['otlp'] = {
+        '()': 'besmart_backend.otel_logging.build_otlp_handler',
+        'service_name': 'besmart_backend',
+        'environment': ENVIRONMENT,
+        'formatter': 'json',
+        'filters': ['ignore_noisy_endpoints'],
+    }
+
+for remote_handler in ('loki', 'otlp'):
+    if remote_handler not in LOGGING['handlers']:
+        continue
+    LOGGING['loggers']['django']['handlers'].append(remote_handler)
+    LOGGING['loggers']['besmart_backend']['handlers'].append(remote_handler)
+
+    # Append the handler to all our local apps
     for app in ['users', 'products', 'orders', 'payments', 'loyalty', 'vendors', 'admin_api', 'support', 'categories', 'currency']:
-        LOGGING['loggers'][app]['handlers'].append(handler_name)
+        LOGGING['loggers'][app]['handlers'].append(remote_handler)
 
 structlog.configure(
     processors=[
