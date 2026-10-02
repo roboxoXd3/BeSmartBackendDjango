@@ -3,10 +3,11 @@ from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from admin_api.views import VersionCheckView
 from besmart_backend.health import HealthCheckView
+from besmart_backend.metrics_endpoint import metrics_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('prometheus/', include('django_prometheus.urls')),
+    path('prometheus/metrics', metrics_view, name='prometheus-django-metrics'),
     path('health/', HealthCheckView.as_view(), name='health-check'),
 
     # API Documentation

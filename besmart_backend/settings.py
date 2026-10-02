@@ -330,6 +330,15 @@ import structlog
 import logging.config
 
 LOKI_URL = os.getenv('LOKI_URL') # e.g., 'http://loki:3100/loki/api/v1/push'
+# Basic auth for Loki (Grafana Cloud: username = Loki user ID, password = access policy token with logs:write).
+LOKI_USERNAME = os.getenv('LOKI_USERNAME')
+LOKI_PASSWORD = os.getenv('LOKI_PASSWORD')
+# Optional second Loki to ship the same logs to, e.g. while running old and new side by side.
+LOKI_SECONDARY_URL = os.getenv('LOKI_SECONDARY_URL')
+LOKI_SECONDARY_USERNAME = os.getenv('LOKI_SECONDARY_USERNAME')
+LOKI_SECONDARY_PASSWORD = os.getenv('LOKI_SECONDARY_PASSWORD')
+# Required to read /prometheus/metrics outside DEBUG (Bearer token, or Basic auth password).
+METRICS_TOKEN = os.getenv('METRICS_TOKEN')
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'local' if DEBUG else 'production')
 
 LOGGING = {
@@ -384,22 +393,29 @@ LOGGING = {
 
 import queue
 
-if LOKI_URL:
-    LOGGING['handlers']['loki'] = {
+LOKI_TARGETS = [
+    ('loki', LOKI_URL, LOKI_USERNAME, LOKI_PASSWORD),
+    ('loki_secondary', LOKI_SECONDARY_URL, LOKI_SECONDARY_USERNAME, LOKI_SECONDARY_PASSWORD),
+]
+for handler_name, loki_url, loki_username, loki_password in LOKI_TARGETS:
+    if not loki_url:
+        continue
+    LOGGING['handlers'][handler_name] = {
         '()': 'logging_loki.LokiQueueHandler',
         'queue': queue.Queue(-1),
-        'url': LOKI_URL,
+        'url': loki_url,
         'tags': {'app': 'besmart_backend', 'env': ENVIRONMENT},
+        'auth': (loki_username, loki_password) if loki_username and loki_password else None,
         'version': '1',
         'formatter': 'json',
         'filters': ['ignore_noisy_endpoints'],
     }
-    LOGGING['loggers']['django']['handlers'].append('loki')
-    LOGGING['loggers']['besmart_backend']['handlers'].append('loki')
-    
+    LOGGING['loggers']['django']['handlers'].append(handler_name)
+    LOGGING['loggers']['besmart_backend']['handlers'].append(handler_name)
+
     # Append Loki handler to all our local apps
     for app in ['users', 'products', 'orders', 'payments', 'loyalty', 'vendors', 'admin_api', 'support', 'categories', 'currency']:
-        LOGGING['loggers'][app]['handlers'].append('loki')
+        LOGGING['loggers'][app]['handlers'].append(handler_name)
 
 structlog.configure(
     processors=[
