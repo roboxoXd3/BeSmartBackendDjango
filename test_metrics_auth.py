@@ -3,6 +3,7 @@ Checks that /prometheus/metrics is protected by METRICS_TOKEN:
   - no credentials / wrong token -> 401 (or 404 when METRICS_TOKEN isn't configured
     and DEBUG is off: then the endpoint is hidden entirely)
   - correct token as `Authorization: Bearer` -> 200 with django_http_* series
+  - responses use the classic text format (0.0.4) unless the scraper asks for a newer one
   - correct token as the HTTP Basic auth password (how Grafana Cloud's hosted
     "Metrics Endpoint" scrape job can send it) -> 200
 
@@ -43,6 +44,14 @@ def main():
     res = requests.get(url, headers={"Authorization": f"Bearer {args.metrics_token}"}, timeout=30)
     check("correct bearer token -> 200", res.status_code == 200, passed, f"{res.status_code}")
     check("response has django_http_* series", "django_http_requests" in res.text, passed)
+    check("no Accept header -> classic text format 0.0.4", "version=0.0.4" in res.headers.get("Content-Type", ""), passed, res.headers.get("Content-Type"))
+
+    # Prometheus 2.x / Grafana-style scraper Accept header must also get 0.0.4.
+    res = requests.get(url, timeout=30, headers={
+        "Authorization": f"Bearer {args.metrics_token}",
+        "Accept": "application/openmetrics-text;version=0.0.1;q=0.75,text/plain;version=0.0.4;q=0.5,*/*;q=0.1",
+    })
+    check("Prometheus 2.x Accept -> 200 text format 0.0.4", res.status_code == 200 and "version=0.0.4" in res.headers.get("Content-Type", ""), passed, f"{res.status_code} {res.headers.get('Content-Type')}")
 
     res = requests.get(url, auth=("grafana", args.metrics_token), timeout=30)
     check("correct token as basic auth password -> 200", res.status_code == 200, passed, f"{res.status_code}")

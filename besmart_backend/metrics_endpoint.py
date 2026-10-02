@@ -8,10 +8,30 @@ password of HTTP Basic auth (any username).
 """
 import base64
 import hmac
+import os
 
+import prometheus_client
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseNotFound
-from django_prometheus.exports import ExportToDjangoView
+from prometheus_client import multiprocess
+from prometheus_client.exposition import choose_encoder
+
+
+def _export(request):
+    """
+    Same output as django_prometheus' ExportToDjangoView, but honouring the
+    scraper's Accept header. ExportToDjangoView always labels the body
+    `text/plain; version=1.0.0` (prometheus_client >= 0.22's default), which
+    scrapers that only speak the classic 0.0.4 format, like Grafana Cloud's
+    hosted Metrics Endpoint, reject.
+    """
+    if "PROMETHEUS_MULTIPROC_DIR" in os.environ or "prometheus_multiproc_dir" in os.environ:
+        registry = prometheus_client.CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+    else:
+        registry = prometheus_client.REGISTRY
+    encoder, content_type = choose_encoder(request.META.get('HTTP_ACCEPT', ''))
+    return HttpResponse(encoder(registry), content_type=content_type)
 
 
 def _presented_token(request):
@@ -34,7 +54,7 @@ def metrics_view(request):
     if not token:
         # Unconfigured: open for local development only, invisible elsewhere.
         if settings.DEBUG:
-            return ExportToDjangoView(request)
+            return _export(request)
         return HttpResponseNotFound()
 
     presented = _presented_token(request)
@@ -42,4 +62,4 @@ def metrics_view(request):
         response = HttpResponse("Unauthorized", status=401, content_type="text/plain")
         response['WWW-Authenticate'] = 'Bearer realm="metrics"'
         return response
-    return ExportToDjangoView(request)
+    return _export(request)
